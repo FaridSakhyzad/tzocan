@@ -98,6 +98,7 @@ function getHoursForCity(timezone: string, offsetMinutes: number, timeFormat: '1
 const CELL_W = 74;
 const DAY_HOURS = 24;
 const DAY_SELECTOR_HEIGHT = 52;
+const EDGE_EXTRA_HOURS = 2;
 
 type DateParts = {
   year: number;
@@ -221,6 +222,7 @@ interface ITimeLineProps {
   minX: number;
   maxX: number;
   enabled: boolean;
+  sidePad: number;
   selectedDay: Date;
   rowOffsetHours: number;
   totalHours: number;
@@ -231,15 +233,15 @@ interface ITimeLineProps {
   width: number;
 }
 
-function Timeline({ x, minX, maxX, enabled, selectedDay, rowOffsetHours, totalHours, dayStartIndex, timelineWidth, hourlyCounts, timeFormat, width }: ITimeLineProps) {
+function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, rowOffsetHours, totalHours, dayStartIndex, timelineWidth, hourlyCounts, timeFormat, width }: ITimeLineProps) {
   const startX = useSharedValue(0);
 
   const snapToCellCenter = (xNow: number) => {
     "worklet";
-    const i = Math.round((xNow + width / 2 - CELL_W / 2) / CELL_W);
+    const i = Math.round((xNow + width / 2 - sidePad - CELL_W / 2) / CELL_W);
     const clampedI = Math.max(0, Math.min(totalHours - 1, i));
 
-    const target = (clampedI + 0.5) * CELL_W - width / 2;
+    const target = sidePad + (clampedI + 0.5) * CELL_W - width / 2;
     return clamp(target, minX, maxX);
   };
 
@@ -269,7 +271,7 @@ function Timeline({ x, minX, maxX, enabled, selectedDay, rowOffsetHours, totalHo
           }
         );
       });
-  }, [enabled, maxX, minX]);
+  }, [enabled, maxX, minX, sidePad, totalHours, width]);
 
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: -x.value - rowOffsetHours * CELL_W }],
@@ -279,6 +281,7 @@ function Timeline({ x, minX, maxX, enabled, selectedDay, rowOffsetHours, totalHo
     <GestureDetector gesture={pan}>
       <View style={styles.timelineViewport}>
           <Animated.View style={[{ width: timelineWidth, flexDirection: "row" }, style]}>
+          <View style={{ width: sidePad }} />
           {Array.from({ length: totalHours }).map((_, i) => {
             const absoluteHour = i - dayStartIndex;
             const isMainDayHour = absoluteHour >= 0 && absoluteHour < DAY_HOURS;
@@ -328,6 +331,7 @@ function Timeline({ x, minX, maxX, enabled, selectedDay, rowOffsetHours, totalHo
               </View>
             )
           })}
+          <View style={{ width: sidePad }} />
           </Animated.View>
         </View>
     </GestureDetector>
@@ -355,13 +359,14 @@ export default function TimelineScreen() {
     return { offsetsMap: map, minOffset: min, maxOffset: max };
   }, [selectedCities]);
 
-  const leftPadHours = Math.ceil(Math.max(0, -minOffset));
-  const rightPadHours = Math.ceil(Math.max(0, maxOffset));
+  const leftPadHours = Math.ceil(Math.max(0, -minOffset)) + EDGE_EXTRA_HOURS;
+  const rightPadHours = Math.ceil(Math.max(0, maxOffset)) + EDGE_EXTRA_HOURS;
   const totalHours = DAY_HOURS + leftPadHours + rightPadHours;
-  const timelineWidth = totalHours * CELL_W;
+  const sidePad = Math.max(0, width / 2 - CELL_W / 2);
+  const timelineWidth = totalHours * CELL_W + sidePad * 2;
   const maxX = Math.max(0, timelineWidth - width);
   const rawMinScrollX = Math.max(0, -minOffset * CELL_W);
-  const rawMaxScrollX = Math.min(maxX, maxX - maxOffset * CELL_W);
+  const rawMaxScrollX = Math.min(maxX, timelineWidth - width - maxOffset * CELL_W);
   const minScrollX = rawMinScrollX <= rawMaxScrollX ? rawMinScrollX : 0;
   const maxScrollX = rawMinScrollX <= rawMaxScrollX ? rawMaxScrollX : maxX;
 
@@ -372,22 +377,22 @@ export default function TimelineScreen() {
     return now;
   });
 
-  const initialScrollValue = (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
+  const initialScrollValue = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
 
   const x = useSharedValue(initialScrollValue);
   x.value = clamp(x.value, minScrollX, maxScrollX);
 
   useFocusEffect(
     useCallback(() => {
-      const target = (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
+      const target = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
       x.value = withTiming(clamp(target, minScrollX, maxScrollX), { duration: 220 });
-    }, [leftPadHours, maxScrollX, minScrollX, width])
+    }, [leftPadHours, maxScrollX, minScrollX, sidePad, width])
   );
 
   const resetToLocalHour = useCallback(() => {
-    const target = (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
+    const target = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
     x.value = withSpring(clamp(target, minScrollX, maxScrollX), { duration: 220 });
-  }, [leftPadHours, maxScrollX, minScrollX, width]);
+  }, [leftPadHours, maxScrollX, minScrollX, sidePad, width]);
 
   const selectedYmd = useMemo(() => ({
     year: selectedDay.getFullYear(),
@@ -433,6 +438,7 @@ export default function TimelineScreen() {
           minX={minScrollX}
           maxX={maxScrollX}
           enabled={!dragging}
+          sidePad={sidePad}
           selectedDay={selectedDay}
           rowOffsetHours={timezoneOffset}
           totalHours={totalHours}
