@@ -13,7 +13,7 @@ export type CityNotification = {
   hour: number;
   minute: number;
   repeat?: RepeatMode;
-  weekdays?: number[]; // JS weekday format: 0=Sun ... 6=Sat (city calendar days)
+  weekdays?: number[]; // JS weekday format: 0=Sun ... 6=Sat (city timeline days)
   notes?: string;
   url?: string;
   enabled: boolean;

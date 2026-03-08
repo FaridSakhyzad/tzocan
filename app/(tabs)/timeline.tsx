@@ -13,10 +13,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
 import { useSettings } from '@/contexts/settings-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
+import type { CityNotification } from '@/contexts/selected-cities-context';
 
 const HOUR_BLOCK_SIZE = 64;
 const HOURS_RANGE = 24;
@@ -94,28 +96,151 @@ function getHoursForCity(timezone: string, offsetMinutes: number, timeFormat: '1
 }
 
 const CELL_W = 74;
-const HOURS = 49;
-const TIMELINE_W = HOURS * CELL_W;
+const DAY_HOURS = 24;
+const DAY_SELECTOR_HEIGHT = 52;
+
+type DateParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
+function getDatePartsInTimezone(date: Date, timezone: string): DateParts {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const getPart = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || '0', 10);
+
+  return {
+    year: getPart('year'),
+    month: getPart('month'),
+    day: getPart('day'),
+    hour: getPart('hour'),
+    minute: getPart('minute'),
+  };
+}
+
+function addDays(year: number, month: number, day: number, offsetDays: number) {
+  const d = new Date(year, month - 1, day + offsetDays);
+  return {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+  };
+}
+
+function isSameYmd(
+  a: { year: number; month: number; day: number },
+  b: { year: number; month: number; day: number }
+) {
+  return a.year === b.year && a.month === b.month && a.day === b.day;
+}
+
+function shouldTriggerOnSelectedDay(
+  notification: CityNotification,
+  cityTz: string,
+  selectedYmd: { year: number; month: number; day: number },
+  selectedWeekday: number
+) {
+  const repeat = notification.repeat || (notification.isDaily ? 'daily' : 'none');
+
+  if (repeat === 'daily') {
+    return true;
+  }
+
+  if (repeat === 'weekly') {
+    const weekdays = notification.weekdays && notification.weekdays.length > 0
+      ? notification.weekdays
+      : [new Date().getDay()];
+    return weekdays.includes(selectedWeekday);
+  }
+
+  if (repeat === 'monthly') {
+    const dayOfMonth = notification.day ?? getDatePartsInTimezone(new Date(), cityTz).day;
+    return selectedYmd.day === dayOfMonth;
+  }
+
+  if (repeat === 'yearly') {
+    const todayInCity = getDatePartsInTimezone(new Date(), cityTz);
+    const month = notification.month ?? todayInCity.month;
+    const day = notification.day ?? todayInCity.day;
+    return selectedYmd.month === month && selectedYmd.day === day;
+  }
+
+  if (notification.year && notification.month && notification.day) {
+    return isSameYmd(selectedYmd, {
+      year: notification.year,
+      month: notification.month,
+      day: notification.day,
+    });
+  }
+
+  const nowInCity = getDatePartsInTimezone(new Date(), cityTz);
+  const isTimePassed =
+    nowInCity.hour > notification.hour ||
+    (nowInCity.hour === notification.hour && nowInCity.minute >= notification.minute);
+
+  const triggerYmd = isTimePassed
+    ? addDays(nowInCity.year, nowInCity.month, nowInCity.day, 1)
+    : { year: nowInCity.year, month: nowInCity.month, day: nowInCity.day };
+
+  return isSameYmd(selectedYmd, triggerYmd);
+}
+
+function getHourlyNotificationCounts(
+  city: SelectedCity,
+  selectedYmd: { year: number; month: number; day: number },
+  selectedWeekday: number
+): Record<number, number> {
+  const result: Record<number, number> = {};
+  const notifications = city.notifications || [];
+
+  notifications.forEach((n) => {
+    if (!n.enabled) return;
+    if (n.hour < 0 || n.hour > 23) return;
+
+    if (shouldTriggerOnSelectedDay(n, city.tz, selectedYmd, selectedWeekday)) {
+      result[n.hour] = (result[n.hour] || 0) + 1;
+    }
+  });
+
+  return result;
+}
 
 interface ITimeLineProps {
   x: SharedValue<number>;
+  minX: number;
   maxX: number;
   enabled: boolean;
-  currentHour: number;
+  selectedDay: Date;
+  rowOffsetHours: number;
+  totalHours: number;
+  dayStartIndex: number;
+  timelineWidth: number;
+  hourlyCounts: Record<number, number>;
   timeFormat: string;
   width: number;
 }
 
-function Timeline({ x, maxX, enabled, currentHour, timeFormat, width }: ITimeLineProps) {
+function Timeline({ x, minX, maxX, enabled, selectedDay, rowOffsetHours, totalHours, dayStartIndex, timelineWidth, hourlyCounts, timeFormat, width }: ITimeLineProps) {
   const startX = useSharedValue(0);
 
   const snapToCellCenter = (xNow: number) => {
     "worklet";
     const i = Math.round((xNow + width / 2 - CELL_W / 2) / CELL_W);
-    const clampedI = Math.max(0, Math.min(HOURS - 1, i));
+    const clampedI = Math.max(0, Math.min(totalHours - 1, i));
 
     const target = (clampedI + 0.5) * CELL_W - width / 2;
-    return clamp(target, 0, maxX);
+    return clamp(target, minX, maxX);
   };
 
   const pan = useMemo(() => {
@@ -131,11 +256,11 @@ function Timeline({ x, maxX, enabled, currentHour, timeFormat, width }: ITimeLin
       .onUpdate((e) => {
         // x растёт при свайпе влево
         const next = startX.value - e.translationX;
-        x.value = clamp(next, 0, maxX);
+        x.value = clamp(next, minX, maxX);
       })
       .onEnd((e) => {
         x.value = withDecay(
-          { velocity: -e.velocityX, clamp: [0, maxX] },
+          { velocity: -e.velocityX, clamp: [minX, maxX] },
           (finished) => {
             if (finished) {
               const target = snapToCellCenter(x.value);
@@ -144,27 +269,49 @@ function Timeline({ x, maxX, enabled, currentHour, timeFormat, width }: ITimeLin
           }
         );
       });
-  }, [enabled, maxX]);
+  }, [enabled, maxX, minX]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: -x.value }],
+    transform: [{ translateX: -x.value - rowOffsetHours * CELL_W }],
   }));
 
   return (
     <GestureDetector gesture={pan}>
-      <View style={{ overflow: "hidden" }}>
-        <Animated.View style={[{ width: TIMELINE_W, flexDirection: "row" }, style]}>
-          {Array.from({ length: HOURS }).map((_, i) => {
-            const hour = timeFormat === '12h' ? (currentHour + i) % 12 : (currentHour + i) % 24;
-            const ampm = ((currentHour + i) % 24 <= 12) ? 'am' : 'pm';
+      <View style={styles.timelineViewport}>
+          <Animated.View style={[{ width: timelineWidth, flexDirection: "row" }, style]}>
+          {Array.from({ length: totalHours }).map((_, i) => {
+            const absoluteHour = i - dayStartIndex;
+            const isMainDayHour = absoluteHour >= 0 && absoluteHour < DAY_HOURS;
+            const normalizedHour = ((absoluteHour % DAY_HOURS) + DAY_HOURS) % DAY_HOURS;
+            const hour = timeFormat === '12h' ? normalizedHour % 12 : normalizedHour;
+            const ampm = normalizedHour < 12 ? 'am' : 'pm';
+            const isYesterdayHour = absoluteHour < 0;
+            const isTomorrowHour = absoluteHour >= DAY_HOURS;
+            const isMidnight = normalizedHour === 0;
+            const dayOffset = Math.floor(absoluteHour / DAY_HOURS);
+            const count = isMainDayHour ? (hourlyCounts[normalizedHour] || 0) : 0;
+            const dayDate = new Date(selectedDay);
+            dayDate.setDate(selectedDay.getDate() + dayOffset);
+            const dayDateLabel = dayDate.toLocaleDateString('ru-RU', {
+              day: '2-digit',
+              month: '2-digit',
+            });
 
             return (
               <View
                 key={i}
                 style={styles.hourBox}
               >
-                <View style={styles.hourBlock}>
-                  {timeFormat === '12h' ? (
+                <View
+                  style={[
+                    styles.hourBlock,
+                    isYesterdayHour && styles.hourBlockYesterday,
+                    isTomorrowHour && styles.hourBlockTomorrow,
+                  ]}
+                >
+                  {isMidnight ? (
+                    <Text style={styles.hourBlockDate}>{dayDateLabel}</Text>
+                  ) : timeFormat === '12h' ? (
                     <>
                       <Text style={styles.hourBlockHour}>{(hour === 0 ? 12 : hour)}</Text>
                       <Text style={styles.hourBlockAmPM}>{ampm}</Text>
@@ -172,45 +319,100 @@ function Timeline({ x, maxX, enabled, currentHour, timeFormat, width }: ITimeLin
                   ) : (
                     <Text style={styles.hourBlockHour}>{hour}</Text>
                   )}
+                  {count > 0 && (
+                    <View style={styles.notificationCountBadge}>
+                      <Text style={styles.notificationCountText}>{count}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
             )
           })}
-        </Animated.View>
-      </View>
+          </Animated.View>
+        </View>
     </GestureDetector>
   );
 }
 
-export default function Calendar() {
+export default function TimelineScreen() {
   const { selectedCities, reorderCities, removeCity } = useSelectedCities();
   const { timeFormat } = useSettings();
   const { isEditMode } = useEditMode();
 
   const { width } = useWindowDimensions();
-  const maxX = Math.max(0, TIMELINE_W - width);
+  const { offsetsMap, minOffset, maxOffset } = useMemo(() => {
+    const map = new Map<number, number>();
+    let min = 0;
+    let max = 0;
 
-  const [cities, setCities] = useState(selectedCities);
-  const [dragging, setDragging] = useState(false);
-
-  const initialScrollValue = TIMELINE_W / 2 - width / 2;
-
-  const x = useSharedValue(initialScrollValue);
-  x.value = clamp(x.value, 0, maxX);
-
-  const renderItem = ({ item: city, drag, isActive }: RenderItemParams<SelectedCity>) => {
-    const timezoneOffset = getTimezoneOffsetHours(city.tz);
-
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: city.tz,
-      hour: 'numeric',
-      hour12: false,
+    selectedCities.forEach((city) => {
+      const offset = getTimezoneOffsetHours(city.tz);
+      map.set(city.id, offset);
+      if (offset < min) min = offset;
+      if (offset > max) max = offset;
     });
 
-    const now = new Date();
-    const shiftedTime = new Date(now.getTime());
+    return { offsetsMap: map, minOffset: min, maxOffset: max };
+  }, [selectedCities]);
 
-    const currentHour = parseInt(formatter.format(shiftedTime), 10);
+  const leftPadHours = Math.ceil(Math.max(0, -minOffset));
+  const rightPadHours = Math.ceil(Math.max(0, maxOffset));
+  const totalHours = DAY_HOURS + leftPadHours + rightPadHours;
+  const timelineWidth = totalHours * CELL_W;
+  const maxX = Math.max(0, timelineWidth - width);
+  const rawMinScrollX = Math.max(0, -minOffset * CELL_W);
+  const rawMaxScrollX = Math.min(maxX, maxX - maxOffset * CELL_W);
+  const minScrollX = rawMinScrollX <= rawMaxScrollX ? rawMinScrollX : 0;
+  const maxScrollX = rawMinScrollX <= rawMaxScrollX ? rawMaxScrollX : maxX;
+
+  const [dragging, setDragging] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    return now;
+  });
+
+  const initialScrollValue = (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
+
+  const x = useSharedValue(initialScrollValue);
+  x.value = clamp(x.value, minScrollX, maxScrollX);
+
+  useFocusEffect(
+    useCallback(() => {
+      const target = (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
+      x.value = withTiming(clamp(target, minScrollX, maxScrollX), { duration: 220 });
+    }, [leftPadHours, maxScrollX, minScrollX, width])
+  );
+
+  const resetToLocalHour = useCallback(() => {
+    const target = (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
+    x.value = withSpring(clamp(target, minScrollX, maxScrollX), { duration: 220 });
+  }, [leftPadHours, maxScrollX, minScrollX, width]);
+
+  const selectedYmd = useMemo(() => ({
+    year: selectedDay.getFullYear(),
+    month: selectedDay.getMonth() + 1,
+    day: selectedDay.getDate(),
+  }), [selectedDay]);
+  const selectedWeekday = selectedDay.getDay();
+
+  const shiftSelectedDay = useCallback((days: number) => {
+    setSelectedDay((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + days);
+      return next;
+    });
+  }, []);
+
+  const resetSelectedDayToToday = useCallback(() => {
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    setSelectedDay(now);
+  }, []);
+
+  const renderItem = ({ item: city, drag, isActive }: RenderItemParams<SelectedCity>) => {
+    const timezoneOffset = offsetsMap.get(city.id) || 0;
+    const hourlyCounts = getHourlyNotificationCounts(city, selectedYmd, selectedWeekday);
 
     return (
       <View
@@ -228,9 +430,15 @@ export default function Calendar() {
 
         <Timeline
           x={x}
-          maxX={maxX}
+          minX={minScrollX}
+          maxX={maxScrollX}
           enabled={!dragging}
-          currentHour={currentHour}
+          selectedDay={selectedDay}
+          rowOffsetHours={timezoneOffset}
+          totalHours={totalHours}
+          dayStartIndex={leftPadHours}
+          timelineWidth={timelineWidth}
+          hourlyCounts={hourlyCounts}
           timeFormat={timeFormat}
           width={width}
         />
@@ -239,30 +447,63 @@ export default function Calendar() {
   };
 
   return (
-    <GestureHandlerRootView>
+    <GestureHandlerRootView style={styles.container}>
       <View style={{
         ...styles.middleMarker,
         left: width / 2 - CELL_W / 2
       }} />
+      <View style={styles.daySelectorBar}>
+        <View style={styles.daySelector}>
+          <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(-1)}>
+            <Text style={styles.daySelectorButtonText}>◀</Text>
+          </Pressable>
+          <Pressable style={styles.daySelectorCenter} onPress={resetSelectedDayToToday}>
+            <Text style={styles.daySelectorDateText}>
+              {selectedDay.toLocaleDateString('ru-RU', {
+                weekday: 'short',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+              })}
+            </Text>
+          </Pressable>
+          <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(1)}>
+            <Text style={styles.daySelectorButtonText}>▶</Text>
+          </Pressable>
+        </View>
+      </View>
       <DraggableFlatList
-        data={cities}
+        contentContainerStyle={styles.listContent}
+        data={selectedCities}
         keyExtractor={(c) => `${c.id}`}
         renderItem={renderItem}
         onDragBegin={() => setDragging(true)}
         onDragEnd={({ data }) => {
-          setCities(data);
+          reorderCities(data);
           setDragging(false);
         }}
         activationDistance={12}
       />
+      <View style={styles.resetBar} pointerEvents="box-none">
+        <Pressable style={styles.resetButtonPressable} onPress={resetToLocalHour}>
+          <View style={styles.resetButton} />
+        </Pressable>
+      </View>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  listContent: {
+    paddingTop: DAY_SELECTOR_HEIGHT,
+    paddingBottom: 84,
+  },
   middleMarker: {
     position: 'absolute',
-    top: 0,
+    top: DAY_SELECTOR_HEIGHT,
     left: 0,
     width: CELL_W,
     height: 3000,
@@ -312,16 +553,114 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     color: 'rgba(255, 255, 255, 1)',
   },
+  hourBlockDate: {
+    fontSize: 18,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 1)',
+    marginTop: 16,
+  },
   hourBlockAmPM: {
     fontSize: 14,
     lineHeight: 14,
     color: 'rgba(255, 255, 255, 1)',
     top: -3
   },
+  hourBlockYesterday: {
+    opacity: 0.3,
+  },
+  hourBlockTomorrow: {
+    opacity: 0.65,
+  },
+  timelineViewport: {
+    overflow: 'hidden',
+  },
+  resetBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -8,
+    alignItems: 'center',
+  },
+  resetButtonPressable: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resetButton: {
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+  },
+  daySelector: {
+    height: DAY_SELECTOR_HEIGHT,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  daySelectorBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  daySelectorButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  daySelectorButtonText: {
+    color: 'rgba(255, 255, 255, 1)',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  daySelectorCenter: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  daySelectorDateText: {
+    color: 'rgba(255, 255, 255, 1)',
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  notificationCountBadge: {
+    position: 'absolute',
+    right: 4,
+    bottom: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  notificationCountText: {
+    fontSize: 11,
+    lineHeight: 11,
+    color: 'rgba(62, 63, 86, 1)',
+    fontWeight: '700',
+  },
 })
 
 /*
-export function Calendar2() {
+export function Timeline2() {
   const { selectedCities, reorderCities, removeCity } = useSelectedCities();
   const { timeFormat, timeOffsetMinutes } = useSettings();
   const { isEditMode } = useEditMode();
@@ -433,7 +772,7 @@ export function Calendar2() {
         <DraggableFlatList
           data={selectedCities}
           onDragEnd={({ data }) => reorderCities(data)}
-          keyExtractor={(item) => `calendar-city-${item.id}`}
+          keyExtractor={(item) => `timeline-city-${item.id}`}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
         />

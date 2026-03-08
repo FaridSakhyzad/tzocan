@@ -17,8 +17,8 @@ import IconSettingsFilled from '@/assets/images/icon--settings-1--filled.svg';
 import IconClockOutlined from '@/assets/images/icon--clock-1--outlined.svg';
 import IconClockFilled from '@/assets/images/icon--clock-1--filled.svg';
 
-import IconCalendarOutlined from '@/assets/images/icon--calendar-1--outlined.svg';
-import IconCalendarFilled from '@/assets/images/icon--calendar-1--filled.svg';
+import IconTimelineOutlined from '@/assets/images/icon--calendar-1--outlined.svg';
+import IconTimelineFilled from '@/assets/images/icon--calendar-1--filled.svg';
 
 import IconNotificationOutlined from '@/assets/images/icon--notification-1--outlined.svg';
 import IconNotificationFilled from '@/assets/images/icon--notification-1--filled.svg';
@@ -34,7 +34,7 @@ function HeaderButtons() {
   const insets = useSafeAreaInsets();
   const { isEditMode, toggleEditMode } = useEditMode();
 
-  const isOnEditablePage = pathname === '/' || pathname === '/index' || pathname === '/notifications' || pathname === '/calendar';
+  const isOnEditablePage = pathname === '/' || pathname === '/index' || pathname === '/notifications' || pathname === '/timeline';
 
   return (
     <View style={{
@@ -175,15 +175,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="calendar"
+        name="timeline"
         options={{
           title: '',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconBox}>
               {focused ? (
-                <IconCalendarFilled style={styles.icon} fill="white" />
+                <IconTimelineFilled style={styles.icon} fill="white" />
               ) : (
-                <IconCalendarOutlined style={styles.icon} fill="white" />
+                <IconTimelineOutlined style={styles.icon} fill="white" />
               )}
             </View>
           ),
