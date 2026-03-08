@@ -11,6 +11,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
 import { useSettings, TimeFormat } from '@/contexts/settings-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
+import { TimeRuler } from '@/components/time-ruler';
 
 function getLocalTime(timezone: string, timeFormat: TimeFormat, offsetMinutes: number = 0): string {
   const now = new Date();
@@ -91,7 +92,7 @@ function getTimezoneOffset(timezone: string): string {
 export default function Index() {
   const router = useRouter();
   const { selectedCities, reorderCities, removeCity } = useSelectedCities();
-  const { timeFormat, timeOffsetMinutes } = useSettings();
+  const { timeFormat, timeOffsetMinutes, setTimeOffsetMinutes } = useSettings();
   const { isEditMode } = useEditMode();
   const [, setTick] = useState(1);
 
@@ -187,14 +188,21 @@ export default function Index() {
             <Text style={styles.emptyStateHint}>Tap the + button to add a city.</Text>
           </View>
         ) : (
-          <DraggableFlatList
-            style={styles.citiesList}
-            data={selectedCities}
-            onDragEnd={({data}) => reorderCities(data)}
-            keyExtractor={(item) => `city-${item.id}`}
-            renderItem={renderItem}
-          />
+          <View style={styles.listContainer}>
+            <DraggableFlatList
+              style={styles.citiesList}
+              data={selectedCities}
+              onDragEnd={({data}) => reorderCities(data)}
+              keyExtractor={(item) => `city-${item.id}`}
+              renderItem={renderItem}
+            />
+          </View>
         )}
+        <TimeRuler
+          offsetMinutes={timeOffsetMinutes}
+          onOffsetChange={setTimeOffsetMinutes}
+          timeFormat={timeFormat}
+        />
       </View>
     </GestureHandlerRootView>
   );
@@ -203,7 +211,11 @@ export default function Index() {
 const styles = StyleSheet.create({
   mainView: {
     flex: 1,
+    flexDirection: 'column',
     backgroundColor: 'rgba(62, 63, 86, 0)',
+  },
+  listContainer: {
+    flex: 1,
   },
   citiesList: {
     paddingHorizontal: 16,

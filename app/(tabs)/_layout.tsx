@@ -5,11 +5,8 @@ import { BottomTabBar, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View, Pressable } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useSettings } from '@/contexts/settings-context';
-import { TimeRuler } from '@/components/time-ruler';
 
 import IconPlusOutlined from '@/assets/images/icon--plus-1--outlined.svg';
 import IconPlusFilled from '@/assets/images/icon--plus-1--filled.svg';
@@ -97,17 +94,18 @@ function HeaderButtons() {
 }
 
 function CustomTabBar(props: BottomTabBarProps) {
-  const { timeFormat, timeOffsetMinutes, setTimeOffsetMinutes } = useSettings();
+  const pathname = usePathname();
+
   const { isEditMode } = useEditMode();
 
+  const isCitiesListScreen = pathname === '/' || pathname === '/index';
+
   return (
-    <View style={styles.bottomBarContainer}>
-      <TimeRuler
-        offsetMinutes={timeOffsetMinutes}
-        onOffsetChange={setTimeOffsetMinutes}
-        timeFormat={timeFormat}
-      />
-      <View style={isEditMode ? styles.tabBarDisabled : undefined} pointerEvents={isEditMode ? 'none' : 'auto'}>
+    <View style={[styles.bottomBarContainer, isCitiesListScreen && styles.bottomBarContainerCitiesList]}>
+      <View
+        style={isEditMode ? styles.tabBarDisabled : undefined}
+        pointerEvents={isEditMode ? 'none' : 'auto'}
+      >
         <BottomTabBar {...props} />
       </View>
     </View>
@@ -212,7 +210,12 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   bottomBarContainer: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.3)',
+    borderTopColor: 'rgba(255, 255, 255, 0.4)',
+    paddingTop: 40,
+  },
+  bottomBarContainerCitiesList: {
+    paddingTop: 18,
+    borderTopWidth: 0,
   },
   tabBarStyle: {
     backgroundColor: 'rgba(62, 63, 86, 0)',
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(62, 63, 86, 0)',
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.4)',
     paddingHorizontal: 32
   },
   headerButton: {

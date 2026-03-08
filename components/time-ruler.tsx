@@ -282,6 +282,8 @@ export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeR
 
 const styles = StyleSheet.create({
   container: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.4)',
     backgroundColor: 'rgba(62, 63, 86, 0)',
   },
   resetButtonContainer: {
@@ -335,7 +337,6 @@ const styles = StyleSheet.create({
   rulerContainer: {
     height: 45,
     position: 'relative',
-    marginBottom: 20,
   },
   scrollContent: {
     alignItems: 'center',

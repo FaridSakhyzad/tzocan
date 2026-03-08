@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   loading: {
-    color: '#9a9bb2',
+    color: '#fff',
     marginBottom: 8,
   },
   resultsList: {

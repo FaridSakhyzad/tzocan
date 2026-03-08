@@ -6,12 +6,39 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  Switch
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useSelectedCities, CityNotification } from '@/contexts/selected-cities-context';
+import { NotificationModal, NotificationFormValues } from '@/components/notification-modal';
+
+function getNotificationScheduleLabel(notification: CityNotification) {
+  const repeat = notification.repeat || (notification.isDaily ? 'daily' : 'none');
+  const weekdayLabel = (d: number) => {
+    if (d === 0) return 'Sun';
+    if (d === 1) return 'Mon';
+    if (d === 2) return 'Tue';
+    if (d === 3) return 'Wed';
+    if (d === 4) return 'Thu';
+    if (d === 5) return 'Fri';
+    return 'Sat';
+  };
+
+  if (repeat === 'daily') return 'Daily';
+  if (repeat === 'weekly') {
+    const days = (notification.weekdays || []).slice().sort((a, b) => a - b).map(weekdayLabel);
+    return days.length > 0 ? `Weekly: ${days.join(', ')}` : 'Weekly';
+  }
+  if (repeat === 'monthly') return 'Monthly';
+  if (repeat === 'yearly') return 'Yearly';
+
+  if (notification.day && notification.month && notification.year) {
+    return `${notification.day.toString().padStart(2, '0')}/${notification.month.toString().padStart(2, '0')}/${notification.year}`;
+  }
+
+  return 'Today';
+}
 
 export default function EditCity() {
   const router = useRouter();
@@ -21,16 +48,8 @@ export default function EditCity() {
   const city = selectedCities.find(c => c.id === Number(cityId));
 
   const [editName, setEditName] = useState(city?.customName || '');
-  const [notificationDate, setNotificationDate] = useState(() => new Date());
-  const [notificationTime, setNotificationTime] = useState(() => {
-    const date = new Date();
-    date.setHours(12, 0, 0, 0);
-    return date;
-  });
-  const [showDateTimePicker, setShowDateTimePicker] = useState(false);
-  const [pickerMode, setPickerMode] = useState<'type' | 'date' | 'time'>('type');
-  const [editingNotificationId, setEditingNotificationId] = useState<string | null>(null);
-  const [isDaily, setIsDaily] = useState(false);
+  const [isNotificationModalVisible, setIsNotificationModalVisible] = useState(false);
+  const [editingNotification, setEditingNotification] = useState<CityNotification | null>(null);
 
   useEffect(() => {
     if (city) {
@@ -56,60 +75,46 @@ export default function EditCity() {
     updateCityName(city.id, text.trim());
   };
 
-  const handleSaveNotification = async () => {
-    const hour = notificationTime.getHours();
-    const minute = notificationTime.getMinutes();
-
-    const year = isDaily ? undefined : notificationDate.getFullYear();
-    const month = isDaily ? undefined : notificationDate.getMonth() + 1;
-    const day = isDaily ? undefined : notificationDate.getDate();
-
-    if (editingNotificationId) {
-      await updateNotification(city.id, editingNotificationId, hour, minute, year, month, day);
-    } else {
-      await addNotification(city.id, hour, minute, year, month, day);
+  const handleSaveNotification = async (values: NotificationFormValues) => {
+    if (editingNotification) {
+      await updateNotification(
+        city.id,
+        editingNotification.id,
+        values.hour,
+        values.minute,
+        values.year,
+        values.month,
+        values.day,
+        values.notes,
+        values.url,
+        values.repeat,
+        values.weekdays
+      );
+      return;
     }
 
-    setShowDateTimePicker(false);
-    setPickerMode('type');
-    setEditingNotificationId(null);
-    setIsDaily(false);
-    setNotificationDate(new Date());
-    const defaultTime = new Date();
-    defaultTime.setHours(12, 0, 0, 0);
-    setNotificationTime(defaultTime);
+    await addNotification(
+      city.id,
+      values.hour,
+      values.minute,
+      values.year,
+      values.month,
+      values.day,
+      values.notes,
+      values.url,
+      values.repeat,
+      values.weekdays
+    );
   };
 
-  const handleEditNotification = (notification: CityNotification) => {
-    const notificationIsDaily = notification.isDaily || !notification.year || !notification.month || !notification.day;
-    setIsDaily(notificationIsDaily);
-
-    if (!notificationIsDaily && notification.year && notification.month && notification.day) {
-      const date = new Date(notification.year, notification.month - 1, notification.day);
-      setNotificationDate(date);
-    } else {
-      setNotificationDate(new Date());
-    }
-
-    const time = new Date();
-    time.setHours(notification.hour, notification.minute, 0, 0);
-    setNotificationTime(time);
-
-    setEditingNotificationId(notification.id);
-    setPickerMode(notificationIsDaily ? 'time' : 'date');
-    setShowDateTimePicker(true);
+  const handleOpenAddNotificationModal = () => {
+    setEditingNotification(null);
+    setIsNotificationModalVisible(true);
   };
 
-  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (selectedDate) {
-      setNotificationDate(selectedDate);
-    }
-  };
-
-  const handleTimeChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (selectedDate) {
-      setNotificationTime(selectedDate);
-    }
+  const handleOpenEditNotificationModal = (notification: CityNotification) => {
+    setEditingNotification(notification);
+    setIsNotificationModalVisible(true);
   };
 
   const handleRemoveNotification = async (notificationId: string) => {
@@ -149,7 +154,7 @@ export default function EditCity() {
         <View style={styles.notificationsSection}>
           <Text style={styles.notificationsSectionTitle}>Notifications</Text>
           <Text style={styles.notificationsSectionHint}>
-            Get notified when it's a specific time in {city.customName || city.name}
+            Get notified when it&apos;s a specific time in {city.customName || city.name}
           </Text>
 
           {city.notifications && city.notifications.length > 0 && (
@@ -158,13 +163,17 @@ export default function EditCity() {
                 <View key={notification.id} style={styles.notificationItem}>
                   <View style={styles.notificationDateTime}>
                     <Text style={styles.notificationDate}>
-                      {notification.isDaily || !notification.day
-                        ? 'Daily'
-                        : `${notification.day?.toString().padStart(2, '0')}/${notification.month?.toString().padStart(2, '0')}/${notification.year}`}
+                      {getNotificationScheduleLabel(notification)}
                     </Text>
                     <Text style={styles.notificationTime}>
                       {notification.hour.toString().padStart(2, '0')}:{notification.minute.toString().padStart(2, '0')}
                     </Text>
+                    {!!notification.notes && (
+                      <Text style={styles.notificationNotes}>{notification.notes}</Text>
+                    )}
+                    {!!notification.url && (
+                      <Text style={styles.notificationUrl}>{notification.url}</Text>
+                    )}
                   </View>
                   <View style={styles.notificationActions}>
                     <Switch
@@ -174,7 +183,7 @@ export default function EditCity() {
                       thumbColor={notification.enabled ? '#fff' : '#9a9bb2'}
                     />
                     <Pressable
-                      onPress={() => handleEditNotification(notification)}
+                      onPress={() => handleOpenEditNotificationModal(notification)}
                       style={styles.editNotificationButton}
                     >
                       <Text style={styles.editNotificationText}>Edit</Text>
@@ -191,100 +200,24 @@ export default function EditCity() {
             </View>
           )}
 
-          <View style={styles.addNotificationContainer}>
-            {!showDateTimePicker ? (
-              <Pressable style={styles.showPickerButton} onPress={() => setShowDateTimePicker(true)}>
-                <Text style={styles.showPickerButtonText}>+ Add Notification</Text>
-              </Pressable>
-            ) : (
-              <View>
-                <Text style={styles.pickerTitle}>
-                  {editingNotificationId ? 'Edit Notification' : 'New Notification'}
-                </Text>
-                {pickerMode === 'type' ? (
-                  <>
-                    <Text style={styles.addNotificationLabel}>Select notification type:</Text>
-                    <View style={styles.typeButtons}>
-                      <Pressable
-                        style={[styles.typeButton, isDaily && styles.typeButtonActive]}
-                        onPress={() => setIsDaily(true)}
-                      >
-                        <Text style={[styles.typeButtonText, isDaily && styles.typeButtonTextActive]}>Daily</Text>
-                        <Text style={styles.typeButtonHint}>Repeats every day</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.typeButton, !isDaily && styles.typeButtonActive]}
-                        onPress={() => setIsDaily(false)}
-                      >
-                        <Text style={[styles.typeButtonText, !isDaily && styles.typeButtonTextActive]}>One-time</Text>
-                        <Text style={styles.typeButtonHint}>Specific date</Text>
-                      </Pressable>
-                    </View>
-                    <View style={styles.pickerButtons}>
-                      <Pressable style={styles.cancelPickerButton} onPress={() => {
-                        setShowDateTimePicker(false);
-                        setEditingNotificationId(null);
-                        setIsDaily(false);
-                      }}>
-                        <Text style={styles.cancelPickerButtonText}>Cancel</Text>
-                      </Pressable>
-                      <Pressable style={styles.confirmPickerButton} onPress={() => setPickerMode(isDaily ? 'time' : 'date')}>
-                        <Text style={styles.confirmPickerButtonText}>Next</Text>
-                      </Pressable>
-                    </View>
-                  </>
-                ) : pickerMode === 'date' ? (
-                  <>
-                    <Text style={styles.addNotificationLabel}>Select date:</Text>
-                    <DateTimePicker
-                      value={notificationDate}
-                      mode="date"
-                      display="spinner"
-                      onChange={handleDateChange}
-                      style={styles.datePicker}
-                      textColor="#fff"
-                      minimumDate={new Date()}
-                    />
-                    <View style={styles.pickerButtons}>
-                      <Pressable style={styles.cancelPickerButton} onPress={() => setPickerMode('type')}>
-                        <Text style={styles.cancelPickerButtonText}>Back</Text>
-                      </Pressable>
-                      <Pressable style={styles.confirmPickerButton} onPress={() => setPickerMode('time')}>
-                        <Text style={styles.confirmPickerButtonText}>Next</Text>
-                      </Pressable>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.addNotificationLabel}>
-                      {isDaily
-                        ? 'Select time (daily):'
-                        : `Select time for ${notificationDate.getDate()}/${notificationDate.getMonth() + 1}/${notificationDate.getFullYear()}:`}
-                    </Text>
-                    <DateTimePicker
-                      value={notificationTime}
-                      mode="time"
-                      is24Hour={true}
-                      display="spinner"
-                      onChange={handleTimeChange}
-                      style={styles.timePicker}
-                      textColor="#fff"
-                    />
-                    <View style={styles.pickerButtons}>
-                      <Pressable style={styles.cancelPickerButton} onPress={() => setPickerMode(isDaily ? 'type' : 'date')}>
-                        <Text style={styles.cancelPickerButtonText}>Back</Text>
-                      </Pressable>
-                      <Pressable style={styles.confirmPickerButton} onPress={handleSaveNotification}>
-                        <Text style={styles.confirmPickerButtonText}>{editingNotificationId ? 'Save' : 'Add'}</Text>
-                      </Pressable>
-                    </View>
-                  </>
-                )}
-              </View>
-            )}
-          </View>
+          <Pressable style={styles.showPickerButton} onPress={handleOpenAddNotificationModal}>
+            <Text style={styles.showPickerButtonText}>+ Add Notification</Text>
+          </Pressable>
         </View>
       </ScrollView>
+
+      <NotificationModal
+        visible={isNotificationModalVisible}
+        cityName={city.customName || city.name}
+        cityTimezone={city.tz}
+        mode={editingNotification ? 'edit' : 'add'}
+        initialNotification={editingNotification}
+        onClose={() => {
+          setIsNotificationModalVisible(false);
+          setEditingNotification(null);
+        }}
+        onSave={handleSaveNotification}
+      />
     </SafeAreaView>
   );
 }
@@ -386,6 +319,16 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     color: '#fff',
   },
+  notificationNotes: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#d8d9f0',
+  },
+  notificationUrl: {
+    marginTop: 2,
+    fontSize: 13,
+    color: '#8fc7ff',
+  },
   notificationActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -413,20 +356,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  addNotificationContainer: {
-    marginTop: 8,
-  },
-  pickerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 12,
-  },
-  addNotificationLabel: {
-    fontSize: 14,
-    color: '#9a9bb2',
-    marginBottom: 8,
-  },
   showPickerButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
@@ -439,74 +368,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
-  },
-  datePicker: {
-    height: 150,
-    marginBottom: 12,
-  },
-  timePicker: {
-    height: 150,
-    marginBottom: 12,
-  },
-  pickerButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelPickerButton: {
-    flex: 1,
-    height: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelPickerButtonText: {
-    color: '#9a9bb2',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  confirmPickerButton: {
-    flex: 1,
-    height: 50,
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmPickerButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  typeButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  typeButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    alignItems: 'center',
-  },
-  typeButtonActive: {
-    borderColor: '#4CAF50',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-  },
-  typeButtonText: {
-    color: '#9a9bb2',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  typeButtonTextActive: {
-    color: '#fff',
-  },
-  typeButtonHint: {
-    color: '#7a7b92',
-    fontSize: 12,
-    marginTop: 4,
   },
 });

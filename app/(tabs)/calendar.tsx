@@ -1,7 +1,19 @@
-import { useRef, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, NativeSyntheticEvent, NativeScrollEvent, Pressable } from 'react-native';
+import { useRef, useCallback, useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent, Pressable } from 'react-native';
+
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import Animated, {
+  clamp,
+  useAnimatedStyle,
+  useSharedValue,
+  withDecay,
+  withTiming,
+  withSpring,
+} from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+
 import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
 import { useSettings } from '@/contexts/settings-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
@@ -81,7 +93,235 @@ function getHoursForCity(timezone: string, offsetMinutes: number, timeFormat: '1
   return hours;
 }
 
+const CELL_W = 74;
+const HOURS = 49;
+const TIMELINE_W = HOURS * CELL_W;
+
+interface ITimeLineProps {
+  x: SharedValue<number>;
+  maxX: number;
+  enabled: boolean;
+  currentHour: number;
+  timeFormat: string;
+  width: number;
+}
+
+function Timeline({ x, maxX, enabled, currentHour, timeFormat, width }: ITimeLineProps) {
+  const startX = useSharedValue(0);
+
+  const snapToCellCenter = (xNow: number) => {
+    "worklet";
+    const i = Math.round((xNow + width / 2 - CELL_W / 2) / CELL_W);
+    const clampedI = Math.max(0, Math.min(HOURS - 1, i));
+
+    const target = (clampedI + 0.5) * CELL_W - width / 2;
+    return clamp(target, 0, maxX);
+  };
+
+  const pan = useMemo(() => {
+    return Gesture.Pan()
+      .enabled(enabled)
+      // активируемся только при заметном горизонтальном движении
+      .activeOffsetX([-12, 12])
+      // если пользователь уходит по Y — отдаём жест вертикальному скроллу списка
+      .failOffsetY([-12, 12])
+      .onBegin(() => {
+        startX.value = x.value;
+      })
+      .onUpdate((e) => {
+        // x растёт при свайпе влево
+        const next = startX.value - e.translationX;
+        x.value = clamp(next, 0, maxX);
+      })
+      .onEnd((e) => {
+        x.value = withDecay(
+          { velocity: -e.velocityX, clamp: [0, maxX] },
+          (finished) => {
+            if (finished) {
+              const target = snapToCellCenter(x.value);
+              x.value = withSpring(target, { duration: 180 });
+            }
+          }
+        );
+      });
+  }, [enabled, maxX]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: -x.value }],
+  }));
+
+  return (
+    <GestureDetector gesture={pan}>
+      <View style={{ overflow: "hidden" }}>
+        <Animated.View style={[{ width: TIMELINE_W, flexDirection: "row" }, style]}>
+          {Array.from({ length: HOURS }).map((_, i) => {
+            const hour = timeFormat === '12h' ? (currentHour + i) % 12 : (currentHour + i) % 24;
+            const ampm = ((currentHour + i) % 24 <= 12) ? 'am' : 'pm';
+
+            return (
+              <View
+                key={i}
+                style={styles.hourBox}
+              >
+                <View style={styles.hourBlock}>
+                  {timeFormat === '12h' ? (
+                    <>
+                      <Text style={styles.hourBlockHour}>{(hour === 0 ? 12 : hour)}</Text>
+                      <Text style={styles.hourBlockAmPM}>{ampm}</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.hourBlockHour}>{hour}</Text>
+                  )}
+                </View>
+              </View>
+            )
+          })}
+        </Animated.View>
+      </View>
+    </GestureDetector>
+  );
+}
+
 export default function Calendar() {
+  const { selectedCities, reorderCities, removeCity } = useSelectedCities();
+  const { timeFormat } = useSettings();
+  const { isEditMode } = useEditMode();
+
+  const { width } = useWindowDimensions();
+  const maxX = Math.max(0, TIMELINE_W - width);
+
+  const [cities, setCities] = useState(selectedCities);
+  const [dragging, setDragging] = useState(false);
+
+  const initialScrollValue = TIMELINE_W / 2 - width / 2;
+
+  const x = useSharedValue(initialScrollValue);
+  x.value = clamp(x.value, 0, maxX);
+
+  const renderItem = ({ item: city, drag, isActive }: RenderItemParams<SelectedCity>) => {
+    const timezoneOffset = getTimezoneOffsetHours(city.tz);
+
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: city.tz,
+      hour: 'numeric',
+      hour12: false,
+    });
+
+    const now = new Date();
+    const shiftedTime = new Date(now.getTime());
+
+    const currentHour = parseInt(formatter.format(shiftedTime), 10);
+
+    return (
+      <View
+        style={styles.listItem}
+      >
+        <View style={styles.listItemHeader}>
+          <Text style={styles.listItemTitle} numberOfLines={1}>
+            {city.customName || city.name} {city.customName && <>({city.name})</>}
+          </Text>
+
+          <Text style={styles.listItemTimeZone} numberOfLines={1}>
+            {timezoneOffset}hrs
+          </Text>
+        </View>
+
+        <Timeline
+          x={x}
+          maxX={maxX}
+          enabled={!dragging}
+          currentHour={currentHour}
+          timeFormat={timeFormat}
+          width={width}
+        />
+      </View>
+    )
+  };
+
+  return (
+    <GestureHandlerRootView>
+      <View style={{
+        ...styles.middleMarker,
+        left: width / 2 - CELL_W / 2
+      }} />
+      <DraggableFlatList
+        data={cities}
+        keyExtractor={(c) => `${c.id}`}
+        renderItem={renderItem}
+        onDragBegin={() => setDragging(true)}
+        onDragEnd={({ data }) => {
+          setCities(data);
+          setDragging(false);
+        }}
+        activationDistance={12}
+      />
+    </GestureHandlerRootView>
+  );
+}
+
+const styles = StyleSheet.create({
+  middleMarker: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: CELL_W,
+    height: 3000,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  listItem: {
+    paddingTop: 11,
+    paddingBottom: 11,
+  },
+  listItemHeader: {
+    paddingHorizontal: 10,
+    paddingBottom: 8,
+    flexDirection: 'row'
+  },
+  listItemTitle: {
+    fontSize: 16,
+    lineHeight: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    color: 'rgba(255, 255, 255, 1)',
+  },
+  listItemTimeZone: {
+    fontSize: 16,
+    lineHeight: 18,
+    color: 'rgba(255, 255, 255, 1)',
+    textAlign: 'right',
+  },
+  hourBox: {
+    width: CELL_W,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hourBlock: {
+    width: 64,
+    height: 64,
+    paddingTop: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    color: 'rgba(255, 255, 255, 0.4)',
+  },
+  hourBlockHour: {
+    fontSize: 36,
+    lineHeight: 36,
+    fontWeight: '300',
+    color: 'rgba(255, 255, 255, 1)',
+  },
+  hourBlockAmPM: {
+    fontSize: 14,
+    lineHeight: 14,
+    color: 'rgba(255, 255, 255, 1)',
+    top: -3
+  },
+})
+
+/*
+export function Calendar2() {
   const { selectedCities, reorderCities, removeCity } = useSelectedCities();
   const { timeFormat, timeOffsetMinutes } = useSettings();
   const { isEditMode } = useEditMode();
@@ -159,30 +399,20 @@ export default function Calendar() {
               </Pressable>
             )}
           </Pressable>
-          <ScrollView
-            ref={setScrollViewRef(city.id)}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            onScroll={handleScroll(city.id)}
-            onScrollEndDrag={handleScrollEnd}
-            onMomentumScrollEnd={handleScrollEnd}
-            scrollEventThrottle={16}
-            contentOffset={{ x: initialScrollX, y: 0 }}
-            bounces={false}
-          >
-            <View style={styles.hoursContainer}>
-              <View style={{ width: leadingPadding }} />
-              {hours.map((hourData, idx) => (
-                <View key={idx} style={styles.hourBlock}>
-                  <Text style={styles.hourText}>
-                    {hourData.label}
-                    {hourData.period && <Text style={styles.periodText}>{hourData.period}</Text>}
-                  </Text>
-                </View>
-              ))}
-              <View style={{ width: trailingPadding }} />
-            </View>
-          </ScrollView>
+          <View style={styles.hoursContainer}>
+            <View style={{ width: leadingPadding }} />
+
+            {hours.map((hourData, idx) => (
+              <View key={idx} style={styles.hourBlock}>
+                <Text style={styles.hourText}>
+                  {hourData.label}
+                  {hourData.period && <Text style={styles.periodText}>{hourData.period}</Text>}
+                </Text>
+              </View>
+            ))}
+
+            <View style={{ width: trailingPadding }} />
+          </View>
         </View>
       </ScaleDecorator>
     );
@@ -190,17 +420,15 @@ export default function Calendar() {
 
   if (selectedCities.length === 0) {
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No cities added yet.</Text>
-          <Text style={styles.emptyHint}>Add cities to see their time comparison.</Text>
-        </View>
-      </GestureHandlerRootView>
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No cities added yet.</Text>
+        <Text style={styles.emptyHint}>Add cities to see their time comparison.</Text>
+      </View>
     );
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureDetector gesture={pan}>
       <View style={styles.container}>
         <DraggableFlatList
           data={selectedCities}
@@ -210,14 +438,14 @@ export default function Calendar() {
           contentContainerStyle={styles.listContent}
         />
       </View>
-    </GestureHandlerRootView>
+    </GestureDetector>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(62, 63, 86, 0.3)',
   },
   listContent: {
     flexGrow: 1,
@@ -300,3 +528,4 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
 });
+*/
