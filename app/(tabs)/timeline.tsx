@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo, useState } from 'react';
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, useWindowDimensions, NativeSyntheticEvent, NativeScrollEvent, Pressable } from 'react-native';
 
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
@@ -387,6 +387,7 @@ export default function TimelineScreen() {
     now.setHours(12, 0, 0, 0);
     return now;
   });
+  const dayTransitionOpacity = useSharedValue(1);
 
   const initialScrollValue = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
 
@@ -425,6 +426,18 @@ export default function TimelineScreen() {
     now.setHours(12, 0, 0, 0);
     setSelectedDay(now);
   }, []);
+
+  useEffect(() => {
+    dayTransitionOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
+      if (finished) {
+        dayTransitionOpacity.value = withTiming(1, { duration: 200 });
+      }
+    });
+  }, [selectedDay]);
+
+  const dayTransitionStyle = useAnimatedStyle(() => ({
+    opacity: dayTransitionOpacity.value,
+  }));
 
   const renderItem = ({ item: city, drag, isActive }: RenderItemParams<SelectedCity>) => {
     const timezoneOffset = offsetsMap.get(city.id) || 0;
@@ -489,18 +502,20 @@ export default function TimelineScreen() {
           </Pressable>
         </View>
       </View>
-      <DraggableFlatList
-        contentContainerStyle={styles.listContent}
-        data={selectedCities}
-        keyExtractor={(c) => `${c.id}`}
-        renderItem={renderItem}
-        onDragBegin={() => setDragging(true)}
-        onDragEnd={({ data }) => {
-          reorderCities(data);
-          setDragging(false);
-        }}
-        activationDistance={12}
-      />
+      <Animated.View style={[styles.listFadeContainer, dayTransitionStyle]}>
+        <DraggableFlatList
+          contentContainerStyle={styles.listContent}
+          data={selectedCities}
+          keyExtractor={(c) => `${c.id}`}
+          renderItem={renderItem}
+          onDragBegin={() => setDragging(true)}
+          onDragEnd={({ data }) => {
+            reorderCities(data);
+            setDragging(false);
+          }}
+          activationDistance={12}
+        />
+      </Animated.View>
       <View style={styles.resetBar} pointerEvents="box-none">
         <Pressable style={styles.resetButtonPressable} onPress={resetToLocalHour}>
           <View style={styles.resetButton} />
@@ -512,6 +527,9 @@ export default function TimelineScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  listFadeContainer: {
     flex: 1,
   },
   listContent: {
