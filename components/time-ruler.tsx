@@ -12,6 +12,7 @@ const TOTAL_MINUTES = HOURS_RANGE * 2 * 60;
 const TOTAL_TICKS = TOTAL_MINUTES / MINUTES_PER_TICK;
 const NUMBER_OF_DUMMIES = Math.ceil(SCREEN_WIDTH / TICK_WIDTH);
 const RULER_WIDTH = TOTAL_TICKS * TICK_WIDTH + NUMBER_OF_DUMMIES * TICK_WIDTH;
+const SNAP_TO_ZERO_THRESHOLD = 3;
 
 type TimeFormat = '12h' | '24h';
 
@@ -182,6 +183,15 @@ export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeR
     if (scrollX < (TICK_WIDTH / 2)) {
       isProgrammaticScroll.current = true;
       scrollViewRef.current?.scrollTo({ x: TICK_WIDTH / 2, animated: true });
+      return;
+    }
+
+    if (Math.abs(newOffset) <= SNAP_TO_ZERO_THRESHOLD) {
+      isProgrammaticScroll.current = true;
+      displayOffsetRef.current = 0;
+      setDisplayOffset(0);
+      onOffsetChange(0);
+      scrollViewRef.current?.scrollTo({ x: getScrollXForOffset(0), animated: true });
       return;
     }
 
