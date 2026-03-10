@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import {
   Text,
   View,
   StyleSheet,
   Pressable,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
@@ -12,6 +13,10 @@ import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-cont
 import { useSettings, TimeFormat } from '@/contexts/settings-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { TimeRuler } from '@/components/time-ruler';
+
+import IconDelete1 from '@/assets/images/icon--delete-1.svg';
+import IconNotification2 from '@/assets/images/icon--notification-2.svg';
+import IconNotificationsMultiple from '@/assets/images/icon--notifications-multiple-1.svg';
 
 function getLocalTime(timezone: string, timeFormat: TimeFormat, offsetMinutes: number = 0): string {
   const now = new Date();
@@ -95,6 +100,20 @@ export default function Index() {
   const { timeFormat, timeOffsetMinutes, setTimeOffsetMinutes } = useSettings();
   const { isEditMode } = useEditMode();
   const [, setTick] = useState(1);
+  const deleteButtonsOpacity = useRef(new Animated.Value(isEditMode ? 1 : 0)).current;
+  const dragHandleReveal = useRef(new Animated.Value(isEditMode ? 1 : 0)).current;
+  const dragHandleTranslateX = dragHandleReveal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-20, 0],
+  });
+  const dragHandleWidth = dragHandleReveal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 32],
+  });
+  const dragHandleOpacity = dragHandleReveal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
 
   useEffect(() => {
     if (selectedCities.length === 0) {
@@ -107,6 +126,21 @@ export default function Index() {
 
     return () => clearInterval(interval);
   }, [selectedCities.length]);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(deleteButtonsOpacity, {
+        toValue: isEditMode ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(dragHandleReveal, {
+        toValue: isEditMode ? 1 : 0,
+        duration: 260,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [deleteButtonsOpacity, dragHandleReveal, isEditMode]);
 
   const handleEditCity = (city: SelectedCity) => {
     if (!isEditMode) {
@@ -134,14 +168,26 @@ export default function Index() {
           ]}
         >
           <View style={styles.cityRow}>
-            {isEditMode && (
+            <Animated.View
+              pointerEvents={isEditMode ? 'auto' : 'none'}
+              style={[
+                styles.dragHandleReveal,
+                {
+                  width: dragHandleWidth,
+                  opacity: dragHandleOpacity,
+                  transform: [{ translateX: dragHandleTranslateX }],
+                },
+              ]}
+            >
               <Pressable
-                onPressIn={drag}
+                onPressIn={isEditMode ? drag : undefined}
+                disabled={!isEditMode}
                 style={styles.dragHandle}
               >
                 <Text style={styles.dragHandleText}>☰</Text>
               </Pressable>
-            )}
+            </Animated.View>
+
             <View style={styles.cityInfo}>
               <Text style={styles.cityName}>
                 {city.customName || city.name}
@@ -156,23 +202,43 @@ export default function Index() {
                   {getTimezoneOffset(city.tz)}
                 </Text>
                 {city.notifications && city.notifications.length > 0 && (
-                  <Text style={styles.cityNotificationCount}>
-                    {city.notifications.length} {city.notifications.length === 1 ? 'notification' : 'notifications'}
-                  </Text>
+                  <View style={styles.cityNotifications}>
+                    {city.notifications.length === 1 && (
+                      <IconNotification2 style={styles.cityNotificationIcon} fill='rgba(255, 255, 255, 1)' />
+                    )}
+                    {city.notifications.length === 2 && (
+                      <>
+                        <IconNotification2 style={styles.cityNotificationIcon} fill='rgba(255, 255, 255, 1)' />
+                        <IconNotification2 style={styles.cityNotificationIcon} fill='rgba(255, 255, 255, 1)' />
+                      </>
+                    )}
+                    {city.notifications.length > 2 && (
+                      <>
+                        <IconNotificationsMultiple style={styles.cityMultipleNotificationsIcon} fill='rgba(255, 255, 255, 1)' /><Text style={styles.cityNotificationCount}>({city.notifications.length})</Text>
+                      </>
+                    )}
+                  </View>
                 )}
               </View>
             </View>
             <Text style={styles.cityTime}>
               {getLocalTime(city.tz, timeFormat, timeOffsetMinutes)}
             </Text>
-            {isEditMode && (
+            <Animated.View
+              pointerEvents={isEditMode ? 'auto' : 'none'}
+              style={[styles.deleteButtonBox, { opacity: deleteButtonsOpacity }]}
+            >
               <Pressable
-                onPress={() => handleDelete(city.id)}
+                onPress={isEditMode ? () => handleDelete(city.id) : undefined}
+                disabled={!isEditMode}
                 style={styles.deleteButton}
               >
-                <Text style={styles.deleteButtonText}>-</Text>
+                <IconDelete1
+                  style={styles.deleteButtonIcon}
+                  fill='rgba(62, 63, 86, 0.7)'
+                />
               </Pressable>
-            )}
+            </Animated.View>
           </View>
         </Pressable>
       </ScaleDecorator>
@@ -195,14 +261,22 @@ export default function Index() {
               onDragEnd={({data}) => reorderCities(data)}
               keyExtractor={(item) => `city-${item.id}`}
               renderItem={renderItem}
+              bounces={false}
+              overScrollMode="never"
+              alwaysBounceVertical={false}
             />
           </View>
         )}
-        <TimeRuler
-          offsetMinutes={timeOffsetMinutes}
-          onOffsetChange={setTimeOffsetMinutes}
-          timeFormat={timeFormat}
-        />
+        <View
+          pointerEvents={isEditMode ? 'none' : 'auto'}
+          style={isEditMode ? styles.timeRulerDisabled : undefined}
+        >
+          <TimeRuler
+            offsetMinutes={timeOffsetMinutes}
+            onOffsetChange={setTimeOffsetMinutes}
+            timeFormat={timeFormat}
+          />
+        </View>
       </View>
     </GestureHandlerRootView>
   );
@@ -220,6 +294,9 @@ const styles = StyleSheet.create({
   citiesList: {
     paddingHorizontal: 16,
     paddingVertical: 0,
+  },
+  timeRulerDisabled: {
+    opacity: 0.6,
   },
   emptyState: {
     flex: 1,
@@ -262,21 +339,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    position: 'relative',
   },
-  deleteButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FF3B30',
+  deleteButtonBox: {
+    position: 'absolute',
+    top: 'auto',
+    bottom: 'auto',
+    right: 0,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(62, 63, 86, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
   },
-  deleteButtonText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '600',
-    lineHeight: 22,
+  deleteButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonIcon: {
+    width: 14,
+    height: 14,
+    color: 'rgba(62, 63, 86, 0.6)'
   },
   cityInfo: {
     flex: 1,
@@ -301,9 +389,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#fff',
   },
+  cityNotifications: {
+    flex: 1,
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  cityNotificationIcon: {
+    width: 13,
+    height: 13,
+  },
+  cityMultipleNotificationsIcon: {
+    width: 19,
+    height: 13,
+  },
   cityNotificationCount: {
     fontSize: 14,
     color: '#fff',
+    paddingLeft: 3,
   },
   cityTime: {
     fontSize: 43,
@@ -312,11 +414,17 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   dragHandle: {
-    padding: 8,
-    marginRight: 8,
+    paddingVertical: 8,
+    paddingLeft: 4,
+    paddingRight: 8,
+  },
+  dragHandleReveal: {
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dragHandleText: {
     fontSize: 20,
-    color: '#9a9bb2',
+    color: '#fff',
   },
 });

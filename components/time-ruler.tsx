@@ -1,6 +1,8 @@
 import { useRef, useImperativeHandle, forwardRef, useState, useEffect } from 'react';
 import { View, ScrollView, Text, StyleSheet, Dimensions, NativeSyntheticEvent, NativeScrollEvent, Pressable, Animated } from 'react-native';
 
+import IconReset from '@/assets/images/icon--reset-1.svg';
+
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const TICK_WIDTH = 15;
 const MINUTES_PER_TICK = 15;
@@ -222,7 +224,9 @@ export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeR
           },
         ]}
       >
-        <Pressable onPress={handleResetPress} style={styles.resetButtonPressable} />
+        <Pressable onPress={handleResetPress} style={styles.resetButtonPressable}>
+          <IconReset style={styles.resetButtonIcon} />
+        </Pressable>
       </Animated.View>
       <View style={styles.timeContainer}>
         <Animated.Text
@@ -303,6 +307,12 @@ const styles = StyleSheet.create({
   resetButtonPressable: {
     width: '100%',
     height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resetButtonIcon: {
+    width: 12,
+    height: 12,
   },
   resetButtonText: {
     fontSize: 12,

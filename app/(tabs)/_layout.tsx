@@ -25,6 +25,7 @@ import IconNotificationFilled from '@/assets/images/icon--notification-1--filled
 
 import IconEditOutlined from '@/assets/images/icon--edit-1--outlined.svg';
 import IconEditFilled from '@/assets/images/icon--edit-1--filled.svg';
+import IconCheckmarkFilled from '@/assets/images/icon--checkmark-1--filled.svg';
 
 import { useEditMode } from '@/contexts/edit-mode-context';
 
@@ -46,7 +47,7 @@ function HeaderButtons() {
         style={[styles.headerButton, !isOnEditablePage && styles.headerButtonDisabled]}
       >
         {isEditMode ? (
-          <IconEditFilled
+          <IconCheckmarkFilled
             style={styles.headerButtonIcon}
             fill="white"
           />
@@ -58,8 +59,9 @@ function HeaderButtons() {
         )}
       </Pressable>
       <Pressable
-        onPress={() => router.push('/add-city')}
-        style={styles.headerButton}
+        onPress={!isEditMode ? () => router.push('/add-city') : undefined}
+        disabled={isEditMode}
+        style={[styles.headerButton, isEditMode && styles.headerButtonDisabled]}
       >
         {pathname === '/add-city' ? (
           <IconPlusFilled
@@ -74,8 +76,9 @@ function HeaderButtons() {
         )}
       </Pressable>
       <Pressable
-        onPress={() => router.push('/settings')}
-        style={styles.headerButton}
+        onPress={!isEditMode ? () => router.push('/settings') : undefined}
+        disabled={isEditMode}
+        style={[styles.headerButton, isEditMode && styles.headerButtonDisabled]}
       >
         {pathname === '/settings' ? (
           <IconSettingsFilled
@@ -223,7 +226,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   tabBarDisabled: {
-    opacity: 0.85,
+    opacity: 0.5,
   },
   headerButtonsContainer: {
     flexDirection: 'row',
@@ -244,7 +247,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerButtonDisabled: {
-    opacity: 0.85,
+    opacity: 0.5,
   },
   headerButtonIcon: {
     width: 30,

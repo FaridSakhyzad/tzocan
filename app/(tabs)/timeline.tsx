@@ -270,6 +270,11 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
     transform: [{ translateX: -x.value - rowOffsetHours * CELL_W }],
   }));
 
+  // Per-row centerable hour range, accounting for timezone row shift.
+  const centerBase = sidePad + CELL_W / 2 - width / 2;
+  const minCenterHourIndex = Math.ceil(rowOffsetHours + (minX - centerBase) / CELL_W - 1e-6);
+  const maxCenterHourIndex = Math.floor(rowOffsetHours + (maxX - centerBase) / CELL_W + 1e-6);
+
   return (
     <GestureDetector gesture={pan}>
       <View style={styles.timelineViewport}>
@@ -283,6 +288,15 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
             const ampm = normalizedHour < 12 ? 'am' : 'pm';
             const isYesterdayHour = absoluteHour < 0;
             const isTomorrowHour = absoluteHour >= DAY_HOURS;
+            const isLeftOutsideScrollLimit = i < minCenterHourIndex;
+            const isRightOutsideScrollLimit = i > maxCenterHourIndex;
+            const isOutsideScrollLimits = isLeftOutsideScrollLimit || isRightOutsideScrollLimit;
+            const isFirstLeftOutside = i === minCenterHourIndex - 1;
+            const isFirstRightOutside = i === maxCenterHourIndex + 1;
+            const shouldFillOutsideBackground =
+              (isLeftOutsideScrollLimit && !isFirstLeftOutside) ||
+              (isRightOutsideScrollLimit && !isFirstRightOutside);
+            const shouldUseOutsideTextColor = shouldFillOutsideBackground;
             const isMidnight = normalizedHour === 0;
             const dayOffset = Math.floor(absoluteHour / DAY_HOURS);
             const count = isMainDayHour ? (hourlyCounts[normalizedHour] || 0) : 0;
@@ -303,17 +317,19 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
                     styles.hourBlock,
                     isYesterdayHour && styles.hourBlockYesterday,
                     isTomorrowHour && styles.hourBlockTomorrow,
+                    isOutsideScrollLimits && styles.hourBlockAfterLimit,
+                    shouldFillOutsideBackground && styles.hourBlockOutsideFilled,
                   ]}
                 >
                   {isMidnight ? (
-                    <Text style={styles.hourBlockDate}>{dayDateLabel}</Text>
+                    <Text style={[styles.hourBlockDate, shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled]}>{dayDateLabel}</Text>
                   ) : timeFormat === '12h' ? (
                     <>
-                      <Text style={styles.hourBlockHour}>{(hour === 0 ? 12 : hour)}</Text>
-                      <Text style={styles.hourBlockAmPM}>{ampm}</Text>
+                      <Text style={[styles.hourBlockHour, shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled]}>{(hour === 0 ? 12 : hour)}</Text>
+                      <Text style={[styles.hourBlockAmPM, shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled]}>{ampm}</Text>
                     </>
                   ) : (
-                    <Text style={styles.hourBlockHour}>{hour}</Text>
+                    <Text style={[styles.hourBlockHour, shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled]}>{hour}</Text>
                   )}
                   {count > 0 && (
                     <View style={styles.notificationCountBadge}>
@@ -603,6 +619,15 @@ const styles = StyleSheet.create({
   },
   hourBlockTomorrow: {
     opacity: 0.65,
+  },
+  hourBlockAfterLimit: {
+    borderColor: 'black',
+  },
+  hourBlockOutsideFilled: {
+    backgroundColor: '#ffffff',
+  },
+  hourBlockTextOutsideFilled: {
+    color: '#000000',
   },
   timelineViewport: {
     overflow: 'hidden',
