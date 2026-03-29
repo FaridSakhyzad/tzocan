@@ -21,6 +21,7 @@ export type NotificationFormValues = {
   minute: number;
   repeat: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
   weekdays?: number[]; // JS: 0=Sun ... 6=Sat
+  label?: string;
   notes?: string;
   url?: string;
 };
@@ -61,6 +62,7 @@ export function NotificationModal({
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'>('none');
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [activePicker, setActivePicker] = useState<'city' | 'time' | 'date' | 'repeat' | 'weekdays' | null>(null);
+  const [notificationLabel, setNotificationLabel] = useState('');
   const [notificationNotes, setNotificationNotes] = useState('');
   const [notificationUrl, setNotificationUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -202,7 +204,8 @@ export function NotificationModal({
 
     setHasDate(hasDateInSource);
     setActivePicker(null);
-    setNotificationNotes(source?.notes || '');
+    setNotificationLabel(source?.label || source?.notes || '');
+    setNotificationNotes(source?.label ? (source.notes || '') : '');
     setNotificationUrl(source?.url || '');
     setPickerDraftTime(time);
     setPickerDraftDate(hasDateInSource && source?.year && source?.month && source?.day ? new Date(source.year, source.month - 1, source.day) : new Date());
@@ -230,6 +233,7 @@ export function NotificationModal({
     try {
       const hour = notificationTime.getHours();
       const minute = notificationTime.getMinutes();
+      const label = notificationLabel.trim() || undefined;
       const notes = notificationNotes.trim() || undefined;
       const url = notificationUrl.trim() || undefined;
 
@@ -241,6 +245,7 @@ export function NotificationModal({
         day: hasDate ? notificationDate.getDate() : undefined,
         repeat,
         weekdays: weekdays.length > 0 ? weekdays : undefined,
+        label,
         notes,
         url,
       };
@@ -418,10 +423,19 @@ export function NotificationModal({
               </Pressable>
             )}
 
+            <Text style={styles.label}>Label</Text>
+            <TextInput
+              style={styles.metaInput}
+              placeholder="Add a label..."
+              placeholderTextColor="#7a7b92"
+              value={notificationLabel}
+              onChangeText={setNotificationLabel}
+            />
+
             <Text style={styles.label}>Notes</Text>
             <TextInput
               style={styles.textAreaInput}
-              placeholder="Add a note..."
+              placeholder="Add notes..."
               placeholderTextColor="#7a7b92"
               value={notificationNotes}
               onChangeText={setNotificationNotes}

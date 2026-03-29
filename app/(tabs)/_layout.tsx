@@ -163,21 +163,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="notifications"
-        options={{
-          title: '',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={styles.iconBox}>
-              {focused ? (
-                <IconNotificationFilled style={styles.icon} fill="white" />
-              ) : (
-                <IconNotificationOutlined style={styles.icon} fill="white" />
-              )}
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="timeline"
         options={{
           title: '',
@@ -187,6 +172,21 @@ export default function TabLayout() {
                 <IconTimelineFilled style={styles.icon} fill="white" />
               ) : (
                 <IconTimelineOutlined style={styles.icon} fill="white" />
+              )}
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: '',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconBox}>
+              {focused ? (
+                <IconNotificationFilled style={styles.icon} fill="white" />
+              ) : (
+                <IconNotificationOutlined style={styles.icon} fill="white" />
               )}
             </View>
           ),

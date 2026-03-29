@@ -85,6 +85,7 @@ export default function EditCity() {
         values.year,
         values.month,
         values.day,
+        values.label,
         values.notes,
         values.url,
         values.repeat,
@@ -100,6 +101,7 @@ export default function EditCity() {
       values.year,
       values.month,
       values.day,
+      values.label,
       values.notes,
       values.url,
       values.repeat,
@@ -168,8 +170,11 @@ export default function EditCity() {
                     <Text style={styles.notificationTime}>
                       {notification.hour.toString().padStart(2, '0')}:{notification.minute.toString().padStart(2, '0')}
                     </Text>
+                    {!!notification.label && (
+                      <Text style={styles.notificationNotes}>{notification.label}</Text>
+                    )}
                     {!!notification.notes && (
-                      <Text style={styles.notificationNotes}>{notification.notes}</Text>
+                      <Text style={styles.notificationUrl}>{notification.notes}</Text>
                     )}
                     {!!notification.url && (
                       <Text style={styles.notificationUrl}>{notification.url}</Text>

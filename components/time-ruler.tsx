@@ -154,6 +154,7 @@ export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeR
     if (displayOffsetRef.current !== newOffset) {
       displayOffsetRef.current = newOffset;
       setDisplayOffset(newOffset);
+      onOffsetChange(newOffset);
     }
   };
 
@@ -304,7 +305,7 @@ export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeR
           onScrollBeginDrag={handleScrollBeginDrag}
           onScrollEndDrag={handleScrollEnd}
           onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={16}
+          scrollEventThrottle={4}
           contentContainerStyle={styles.scrollContent}
           contentOffset={{ x: initialScrollXRef.current, y: 0 }}
           decelerationRate={0}

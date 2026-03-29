@@ -20,6 +20,10 @@ import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-cont
 import { useSettings } from '@/contexts/settings-context';
 import type { CityNotification } from '@/contexts/selected-cities-context';
 
+import IconNotification from '@/assets/images/icon--notification-2.svg';
+import IconReset from '@/assets/images/icon--reset-1.svg';
+import Arrow1 from '@/assets/images/icon--arrow-1.svg';
+
 function getTimezoneOffsetHours(timezone: string): number {
   const now = new Date();
 
@@ -55,10 +59,19 @@ function getTimezoneOffsetHours(timezone: string): number {
   return diffMinutes / 60;
 }
 
+function getCurrentTimeInTimezone(timezone: string, locale: string, timeFormat: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: timeFormat === '12h',
+  }).format(new Date());
+}
+
 
 const CELL_W = 74;
 const DAY_HOURS = 24;
-const DAY_SELECTOR_HEIGHT = 52;
+
 const EDGE_EXTRA_HOURS = 2;
 const EDGE_RUBBER_MAX_PX = 110;
 const EDGE_SWITCH_THRESHOLD_PX = 45;
@@ -195,9 +208,10 @@ interface ITimeLineProps {
   hourlyCounts: Record<number, number>;
   timeFormat: string;
   width: number;
+  locale: string;
 }
 
-function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift, rowOffsetHours, totalHours, dayStartIndex, timelineWidth, hourlyCounts, timeFormat, width }: ITimeLineProps) {
+function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift, rowOffsetHours, totalHours, dayStartIndex, timelineWidth, hourlyCounts, timeFormat, width, locale }: ITimeLineProps) {
   const startX = useSharedValue(0);
 
   const snapToCellCenter = (xNow: number) => {
@@ -278,14 +292,16 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
   return (
     <GestureDetector gesture={pan}>
       <View style={styles.timelineViewport}>
-          <Animated.View style={[{ width: timelineWidth, flexDirection: "row" }, style]}>
+        <Animated.View style={[{ width: timelineWidth, flexDirection: "row" }, style]}>
           <View style={{ width: sidePad }} />
+
           {Array.from({ length: totalHours }).map((_, i) => {
             const absoluteHour = i - dayStartIndex;
             const isMainDayHour = absoluteHour >= 0 && absoluteHour < DAY_HOURS;
             const normalizedHour = ((absoluteHour % DAY_HOURS) + DAY_HOURS) % DAY_HOURS;
             const hour = timeFormat === '12h' ? normalizedHour % 12 : normalizedHour;
             const ampm = normalizedHour < 12 ? 'am' : 'pm';
+
             const isYesterdayHour = absoluteHour < 0;
             const isTomorrowHour = absoluteHour >= DAY_HOURS;
             const isLeftOutsideScrollLimit = i < minCenterHourIndex;
@@ -302,7 +318,8 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
             const count = isMainDayHour ? (hourlyCounts[normalizedHour] || 0) : 0;
             const dayDate = new Date(selectedDay);
             dayDate.setDate(selectedDay.getDate() + dayOffset);
-            const dayDateLabel = dayDate.toLocaleDateString('ru-RU', {
+
+            const dayDateLabel = dayDate.toLocaleDateString(locale, {
               day: '2-digit',
               month: '2-digit',
             });
@@ -315,6 +332,7 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
                 <View
                   style={[
                     styles.hourBlock,
+                    timeFormat === '12h' && styles.hourBlock12hFormat,
                     isYesterdayHour && styles.hourBlockYesterday,
                     isTomorrowHour && styles.hourBlockTomorrow,
                     isOutsideScrollLimits && styles.hourBlockAfterLimit,
@@ -333,16 +351,21 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
                   )}
                   {count > 0 && (
                     <View style={styles.notificationCountBadge}>
-                      <Text style={styles.notificationCountText}>{count}</Text>
+                      <IconNotification
+                        style={styles.notificationCountIcon}
+                        fill='rgba(62, 63, 86, 0.5)'
+                      />
+                      {count > 1 && (<Text style={styles.notificationCountText}>{count}</Text>)}
                     </View>
                   )}
                 </View>
               </View>
             )
           })}
+
           <View style={{ width: sidePad }} />
-          </Animated.View>
-        </View>
+        </Animated.View>
+      </View>
     </GestureDetector>
   );
 }
@@ -350,6 +373,19 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
 export default function TimelineScreen() {
   const { selectedCities, reorderCities } = useSelectedCities();
   const { timeFormat } = useSettings();
+  const [, setClockTick] = useState(0);
+  const locale = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().locale || 'en-US',
+    []
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setClockTick((t) => t + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   const { width } = useWindowDimensions();
   const { offsetsMap, minOffset, maxOffset } = useMemo(() => {
@@ -451,9 +487,31 @@ export default function TimelineScreen() {
     opacity: dayTransitionOpacity.value,
   }));
 
+  const selectedDayMonthDay = useMemo(() => {
+    const parts = new Intl.DateTimeFormat(locale, {
+      month: 'long',
+      day: 'numeric',
+    }).formatToParts(selectedDay);
+
+    const month = parts.find((p) => p.type === 'month')?.value ?? '';
+    const day = parts.find((p) => p.type === 'day')?.value ?? '';
+
+    return `${month}, ${day}`;
+  }, [locale, selectedDay]);
+
   const renderItem = ({ item: city }: RenderItemParams<SelectedCity>) => {
     const timezoneOffset = offsetsMap.get(city.id) || 0;
     const hourlyCounts = getHourlyNotificationCounts(city, selectedYmd, selectedWeekday);
+
+    let timeZoneLabel;
+
+    if (timezoneOffset === 0) {
+      timeZoneLabel = ', same';
+    } else if (timezoneOffset > 0) {
+      timeZoneLabel = `, +${timezoneOffset}`
+    } else {
+      timeZoneLabel = `, ${timezoneOffset}`
+    }
 
     return (
       <View
@@ -461,11 +519,14 @@ export default function TimelineScreen() {
       >
         <View style={styles.listItemHeader}>
           <Text style={styles.listItemTitle} numberOfLines={1}>
-            {city.customName || city.name} {city.customName && <>({city.name})</>}
+            <Text style={styles.listItemTitleCity}>
+              {city.customName || city.name}{city.customName && <> ({city.name})</>}
+            </Text>
+            <Text style={styles.listItemTitleTimeOffset}>{timeZoneLabel}</Text>
           </Text>
 
-          <Text style={styles.listItemTimeZone} numberOfLines={1}>
-            {timezoneOffset}hrs
+          <Text style={styles.listItemCurrentTime} numberOfLines={1}>
+            {getCurrentTimeInTimezone(city.tz, locale, timeFormat)}
           </Text>
         </View>
 
@@ -484,6 +545,7 @@ export default function TimelineScreen() {
           hourlyCounts={hourlyCounts}
           timeFormat={timeFormat}
           width={width}
+          locale={locale}
         />
       </View>
     )
@@ -491,31 +553,11 @@ export default function TimelineScreen() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <View style={{
-        ...styles.middleMarker,
-        left: width / 2 - CELL_W / 2
-      }} />
-      <View style={styles.daySelectorBar}>
-        <View style={styles.daySelector}>
-          <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(-1)}>
-            <Text style={styles.daySelectorButtonText}>◀</Text>
-          </Pressable>
-          <Pressable style={styles.daySelectorCenter} onPress={resetSelectedDayToToday}>
-            <Text style={styles.daySelectorDateText}>
-              {selectedDay.toLocaleDateString('ru-RU', {
-                weekday: 'short',
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              })}
-            </Text>
-          </Pressable>
-          <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(1)}>
-            <Text style={styles.daySelectorButtonText}>▶</Text>
-          </Pressable>
-        </View>
-      </View>
       <Animated.View style={[styles.listFadeContainer, dayTransitionStyle]}>
+        <View style={{
+          ...styles.middleMarker,
+          left: width / 2 - CELL_W / 2
+        }} />
         <DraggableFlatList
           contentContainerStyle={styles.listContent}
           data={selectedCities}
@@ -531,12 +573,45 @@ export default function TimelineScreen() {
       </Animated.View>
       <View style={styles.resetBar} pointerEvents="box-none">
         <Pressable style={styles.resetButtonPressable} onPress={resetToLocalHour}>
-          <View style={styles.resetButton} />
+          <View style={styles.resetButton}>
+            <IconReset
+              style={styles.resetButtonIcon}
+              fill='rgba(62, 63, 86, 0.6)'
+            />
+          </View>
         </Pressable>
+      </View>
+      <View style={styles.daySelectorBar}>
+        <View style={styles.daySelector}>
+          <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(-1)}>
+            <Arrow1
+              style={[styles.daySelectorButtonIcon, styles.daySelectorButtonIconRight]}
+              fill='rgba(255, 255, 255, 1)'
+            />
+          </Pressable>
+          <Pressable style={styles.daySelectorCenter} onPress={resetSelectedDayToToday}>
+            <Text style={styles.daySelectorWeekdayText}>
+              {selectedDay.toLocaleDateString(locale, {
+                weekday: 'long',
+              })}
+            </Text>
+            <Text style={styles.daySelectorDateText}>
+              {selectedDayMonthDay}
+            </Text>
+          </Pressable>
+          <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(1)}>
+            <Arrow1
+              style={[styles.daySelectorButtonIcon]}
+              fill='rgba(255, 255, 255, 1)'
+            />
+          </Pressable>
+        </View>
       </View>
     </GestureHandlerRootView>
   );
 }
+
+const DAY_SELECTOR_HEIGHT = 60;
 
 const styles = StyleSheet.create({
   container: {
@@ -544,22 +619,27 @@ const styles = StyleSheet.create({
   },
   listFadeContainer: {
     flex: 1,
+    overflow: 'hidden',
   },
   listContent: {
-    paddingTop: DAY_SELECTOR_HEIGHT,
-    paddingBottom: 84,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   middleMarker: {
     position: 'absolute',
-    top: DAY_SELECTOR_HEIGHT,
+    top: 0,
+    bottom: DAY_SELECTOR_HEIGHT,
     left: 0,
     width: CELL_W,
     height: 3000,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(62, 63, 86, 0.15)',
+  },
+  timelineViewport: {
+    overflow: 'hidden',
+    paddingBottom: 11
   },
   listItem: {
     paddingTop: 11,
-    paddingBottom: 11,
   },
   listItemHeader: {
     paddingHorizontal: 10,
@@ -567,13 +647,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row'
   },
   listItemTitle: {
+    flex: 1,
+  },
+  listItemTitleCity: {
     fontSize: 16,
     lineHeight: 18,
     fontWeight: 'bold',
+    color: 'rgba(255, 255, 255, 1)',
+  },
+  listItemTitleTimeOffset: {
+    fontSize: 16,
+    lineHeight: 18,
     flex: 1,
     color: 'rgba(255, 255, 255, 1)',
   },
-  listItemTimeZone: {
+  listItemCurrentTime: {
     fontSize: 16,
     lineHeight: 18,
     color: 'rgba(255, 255, 255, 1)',
@@ -587,13 +675,16 @@ const styles = StyleSheet.create({
   hourBlock: {
     width: 64,
     height: 64,
-    paddingTop: 8,
-    borderWidth: 1,
+    paddingTop: 4,
     borderRadius: 10,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     color: 'rgba(255, 255, 255, 0.4)',
+  },
+  hourBlock12hFormat: {
+    paddingTop: 8,
+    justifyContent: 'flex-start',
   },
   hourBlockHour: {
     fontSize: 36,
@@ -620,28 +711,49 @@ const styles = StyleSheet.create({
   hourBlockTomorrow: {
     opacity: 0.65,
   },
-  hourBlockAfterLimit: {
-    borderColor: 'black',
-  },
+  hourBlockAfterLimit: {},
   hourBlockOutsideFilled: {
+    borderWidth: 1,
+    borderColor: 'black',
     backgroundColor: '#ffffff',
   },
   hourBlockTextOutsideFilled: {
     color: '#000000',
   },
-  timelineViewport: {
-    overflow: 'hidden',
+  notificationCountBadge: {
+    position: 'absolute',
+    bottom: -8,
+    minWidth: 18,
+    height: 15,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    flexDirection: 'row',
+    gap: 2,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+  },
+  notificationCountIcon: {
+    width: 9,
+    height: 9,
+  },
+  notificationCountText: {
+    fontSize: 12,
+    lineHeight: 13,
+    color: 'rgba(62, 63, 86, 0.6)',
   },
   resetBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: -8,
+    position: 'relative',
     alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   resetButtonPressable: {
-    width: 36,
-    height: 36,
+    position: 'absolute',
+    bottom: -10,
+    width: 20,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -650,68 +762,53 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     backgroundColor: 'rgba(255, 255, 255, 1)',
-  },
-  daySelector: {
-    height: DAY_SELECTOR_HEIGHT,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+  },
+  resetButtonIcon: {
+    width: 12,
+    height: 12,
   },
   daySelectorBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 2,
+    height: 60,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  daySelector: {
+    width: 256,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   daySelectorButton: {
     width: 36,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(62, 63, 86, 0.4)',
   },
-  daySelectorButtonText: {
-    color: 'rgba(255, 255, 255, 1)',
-    fontSize: 16,
-    fontWeight: '600',
+  daySelectorButtonIcon: {
+    width: 7,
+    height: 12,
+  },
+  daySelectorButtonIconRight: {
+    transform: [{ rotate: '180deg'}],
   },
   daySelectorCenter: {
-    flex: 1,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    flexDirection: 'column',
+  },
+  daySelectorWeekdayText: {
+    color: 'rgba(255, 255, 255, 1)',
+    fontSize: 14
   },
   daySelectorDateText: {
     color: 'rgba(255, 255, 255, 1)',
-    fontSize: 14,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  notificationCountBadge: {
-    position: 'absolute',
-    right: 4,
-    bottom: 4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  },
-  notificationCountText: {
-    fontSize: 11,
-    lineHeight: 11,
-    color: 'rgba(62, 63, 86, 1)',
-    fontWeight: '700',
+    fontSize: 18
   },
 })

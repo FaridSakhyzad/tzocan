@@ -14,6 +14,7 @@ export type CityNotification = {
   minute: number;
   repeat?: RepeatMode;
   weekdays?: number[]; // JS weekday format: 0=Sun ... 6=Sat (city timeline days)
+  label?: string;
   notes?: string;
   url?: string;
   enabled: boolean;
@@ -33,8 +34,8 @@ type SelectedCitiesContextType = {
   removeCity: (cityId: number) => void;
   updateCityName: (cityId: number, customName: string) => void;
   reorderCities: (cities: SelectedCity[]) => void;
-  addNotification: (cityId: number, hour: number, minute: number, year?: number, month?: number, day?: number, notes?: string, url?: string, repeat?: RepeatMode, weekdays?: number[]) => Promise<void>;
-  updateNotification: (cityId: number, notificationId: string, hour: number, minute: number, year?: number, month?: number, day?: number, notes?: string, url?: string, repeat?: RepeatMode, weekdays?: number[]) => Promise<void>;
+  addNotification: (cityId: number, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat?: RepeatMode, weekdays?: number[]) => Promise<void>;
+  updateNotification: (cityId: number, notificationId: string, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat?: RepeatMode, weekdays?: number[]) => Promise<void>;
   removeNotification: (cityId: number, notificationId: string) => Promise<void>;
   toggleNotification: (cityId: number, notificationId: string, enabled: boolean) => Promise<boolean>;
   isLoaded: boolean;
@@ -100,6 +101,7 @@ async function scheduleNotification(
   year?: number,
   month?: number,
   day?: number,
+  label?: string,
   notes?: string,
   url?: string,
   repeat: RepeatMode = 'none',
@@ -142,6 +144,7 @@ async function scheduleNotification(
   const localMonth = anchorTrigger.getMonth() + 1;
 
   const body = notes ? `It's ${timeString} in ${cityName}\n${notes}` : `It's ${timeString} in ${cityName}`;
+  const title = label || cityName;
 
   if (repeat === 'none') {
     if (anchorTrigger.getTime() <= Date.now()) {
@@ -159,7 +162,7 @@ async function scheduleNotification(
 
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `${cityName}`,
+        title,
         body,
         sound: true,
         data: { url },
@@ -175,7 +178,7 @@ async function scheduleNotification(
   if (repeat === 'daily') {
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `${cityName}`,
+        title,
         body,
         sound: true,
         data: { url },
@@ -219,7 +222,7 @@ async function scheduleNotification(
     for (const trigger of uniqueTriggers.values()) {
       const id = await Notifications.scheduleNotificationAsync({
         content: {
-          title: `${cityName}`,
+          title,
           body,
           sound: true,
           data: { url },
@@ -239,7 +242,7 @@ async function scheduleNotification(
   if (repeat === 'monthly') {
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `${cityName}`,
+        title,
         body,
         sound: true,
         data: { url },
@@ -256,7 +259,7 @@ async function scheduleNotification(
 
   const notificationId = await Notifications.scheduleNotificationAsync({
     content: {
-      title: `${cityName}`,
+      title,
       body,
       sound: true,
       data: { url },
@@ -310,7 +313,18 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          setSelectedCities(parsed);
+          const migrated = parsed.map((city) => ({
+            ...city,
+            notifications: Array.isArray(city.notifications)
+              ? city.notifications.map((notification: CityNotification) => (
+                  notification.label || !notification.notes
+                    ? notification
+                    : { ...notification, label: notification.notes, notes: undefined }
+                ))
+              : city.notifications,
+          }));
+          setSelectedCities(migrated);
+          saveCities(migrated);
         }
       }
     } catch (error) {
@@ -370,7 +384,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
     saveCities(cities);
   };
 
-  const addNotification = async (cityId: number, hour: number, minute: number, year?: number, month?: number, day?: number, notes?: string, url?: string, repeat: RepeatMode = 'none', weekdays: number[] = []) => {
+  const addNotification = async (cityId: number, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat: RepeatMode = 'none', weekdays: number[] = []) => {
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) {
       console.warn('Notification permissions not granted');
@@ -380,7 +394,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
     const city = selectedCities.find(c => c.id === cityId);
     if (!city) return;
 
-    const notificationIds = await scheduleNotification(city, hour, minute, year, month, day, notes, url, repeat, weekdays);
+    const notificationIds = await scheduleNotification(city, hour, minute, year, month, day, label, notes, url, repeat, weekdays);
 
     if (!notificationIds || notificationIds.length === 0) {
       return;
@@ -395,6 +409,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
       minute,
       repeat,
       weekdays: weekdays.length > 0 ? weekdays : undefined,
+      label,
       notes,
       url,
       enabled: true,
@@ -420,7 +435,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const updateNotification = async (cityId: number, notificationId: string, hour: number, minute: number, year?: number, month?: number, day?: number, notes?: string, url?: string, repeat: RepeatMode = 'none', weekdays: number[] = []) => {
+  const updateNotification = async (cityId: number, notificationId: string, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat: RepeatMode = 'none', weekdays: number[] = []) => {
     const city = selectedCities.find(c => c.id === cityId);
     const notification = city?.notifications?.find(n => n.id === notificationId);
 
@@ -430,7 +445,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
     await cancelNotificationIds(notification);
 
     // Schedule new notification
-    const newSystemNotificationIds = await scheduleNotification(city, hour, minute, year, month, day, notes, url, repeat, weekdays);
+    const newSystemNotificationIds = await scheduleNotification(city, hour, minute, year, month, day, label, notes, url, repeat, weekdays);
 
     if (!newSystemNotificationIds || newSystemNotificationIds.length === 0) {
       return;
@@ -452,6 +467,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
                     minute,
                     repeat,
                     weekdays: weekdays.length > 0 ? weekdays : undefined,
+                    label,
                     notes,
                     url,
                     enabled: true,
@@ -511,6 +527,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
         notification.year,
         notification.month,
         notification.day,
+        notification.label,
         notification.notes,
         notification.url,
         notification.repeat || (notification.isDaily ? 'daily' : 'none'),
