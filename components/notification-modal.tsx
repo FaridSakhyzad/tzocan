@@ -9,9 +9,51 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ImageBackground
 } from 'react-native';
+
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CityNotification } from '@/contexts/selected-cities-context';
+import IconCancelOutlined from '@/assets/images/icon--x-1--outlined.svg';
+import IconConfirmOutlined from '@/assets/images/icon--checkmark-1--outlined.svg';
+
+import IconClock from '@/assets/images/icon--clock-2--outlined.svg';
+import IconCalendar from '@/assets/images/icon--calendar-2--outlined.svg';
+import IconRepeat from '@/assets/images/icon--repeat-1.svg';
+
+import IconDelete from '@/assets/images/icon--x-2--outlined.svg';
+
+import IconArrow from '@/assets/images/icon--arrow-1.svg';
+
+const DATE_SHIFT_LABELS = {
+  previousDay: 'Previous day',
+  nextDay: 'Next day',
+  previousMonth: 'Previous month',
+  nextMonth: 'Next month',
+  previousYear: 'Previous year',
+  nextYear: 'Next year',
+} as const;
+
+const REPEAT_LABELS = {
+  todayOnly: 'Today only',
+  daily: 'Every day',
+  weekly: 'Every week',
+  monthly: 'Every month',
+  yearly: 'Every year',
+  chooseRepeat: 'Repeat...',
+  chooseSpecificWeekdays: 'Choose specific weekdays',
+  weekdaysNotSelected: 'Not selected',
+  weekdays: {
+    0: 'Sun',
+    1: 'Mon',
+    2: 'Tue',
+    3: 'Wed',
+    4: 'Thu',
+    5: 'Fri',
+    6: 'Sat',
+  } as const,
+} as const;
 
 export type NotificationFormValues = {
   year?: number;
@@ -31,12 +73,13 @@ type NotificationModalProps = {
   cityName: string;
   cityTimezone?: string;
   mode: 'add' | 'edit';
+  citySelectionMode?: 'selectable' | 'locked';
   cityOptions?: Array<{ id: number; label: string; hint?: string; timezone: string }>;
   selectedCityId?: number | null;
   onSelectCityId?: (cityId: number) => void;
   initialNotification?: CityNotification | null;
   onClose: () => void;
-  onSave: (values: NotificationFormValues) => Promise<void>;
+  onSave: (values: NotificationFormValues) => Promise<boolean>;
 };
 
 export function NotificationModal({
@@ -44,6 +87,7 @@ export function NotificationModal({
   cityName,
   cityTimezone,
   mode,
+  citySelectionMode = 'locked',
   cityOptions,
   selectedCityId,
   onSelectCityId,
@@ -51,10 +95,11 @@ export function NotificationModal({
   onClose,
   onSave,
 }: NotificationModalProps) {
+  const insets = useSafeAreaInsets();
   const [notificationDate, setNotificationDate] = useState(new Date());
   const [notificationTime, setNotificationTime] = useState(() => {
     const date = new Date();
-    date.setHours(12, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
     return date;
   });
   const [hasDate, setHasDate] = useState(false);
@@ -71,6 +116,25 @@ export function NotificationModal({
   const [pickerDraftRepeat, setPickerDraftRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'>('none');
   const [pickerDraftWeekdays, setPickerDraftWeekdays] = useState<number[]>([]);
   const [pickerDraftCityId, setPickerDraftCityId] = useState<number | null>(null);
+
+  const formatDateLabel = (date: Date) => {
+    const currentYear = new Date().getFullYear();
+    const includeYear = date.getFullYear() !== currentYear;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      ...(includeYear ? { year: 'numeric' } : {}),
+    }).formatToParts(date);
+    const getPart = (type: string) => parts.find((part) => part.type === type)?.value || '';
+    const baseLabel = `${getPart('weekday')} ${getPart('day')} ${getPart('month')}`;
+
+    if (includeYear) {
+      return `${baseLabel}, ${getPart('year')}`;
+    }
+
+    return baseLabel;
+  };
 
   const getTriggerDateForTimezone = (
     timezone: string,
@@ -164,17 +228,39 @@ export function NotificationModal({
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(triggerDate);
+    const localTimeText = new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(triggerDate);
 
     const localYear = triggerDate.getFullYear();
     const localMonth = triggerDate.getMonth() + 1;
     const localDay = triggerDate.getDate();
+    const localDateText = formatDateLabel(triggerDate);
     const cityStamp = Date.UTC(cityYear, cityMonth - 1, cityDay);
     const localStamp = Date.UTC(localYear, localMonth - 1, localDay);
     const dayDiff = Math.round((localStamp - cityStamp) / 86400000);
+    const monthOrYearShiftText =
+      localYear > cityYear ? DATE_SHIFT_LABELS.nextYear
+        : localYear < cityYear ? DATE_SHIFT_LABELS.previousYear
+          : localMonth > cityMonth ? DATE_SHIFT_LABELS.nextMonth
+            : localMonth < cityMonth ? DATE_SHIFT_LABELS.previousMonth
+              : '';
 
-    const dayShiftText = dayDiff < 0 ? 'предыдущий день' : dayDiff > 0 ? 'следующий день' : '';
+    const dayShiftText =
+      dayDiff < 0
+        ? DATE_SHIFT_LABELS.previousDay
+        : dayDiff > 0
+          ? DATE_SHIFT_LABELS.nextDay
+          : '';
 
-    return { dateText, dayShiftText };
+    return {
+      dateText,
+      localTimeText,
+      localDateText: localStamp !== cityStamp ? localDateText : '',
+      monthOrYearShiftText,
+      dayShiftText,
+    };
   };
 
   useEffect(() => {
@@ -195,7 +281,7 @@ export function NotificationModal({
     if (source) {
       time.setHours(source.hour, source.minute, 0, 0);
     } else {
-      time.setHours(12, 0, 0, 0);
+      time.setHours(0, 0, 0, 0);
     }
     setNotificationTime(time);
     setIsTimeSelected(Boolean(source));
@@ -207,7 +293,11 @@ export function NotificationModal({
     setNotificationLabel(source?.label || source?.notes || '');
     setNotificationNotes(source?.label ? (source.notes || '') : '');
     setNotificationUrl(source?.url || '');
-    setPickerDraftTime(time);
+    const initialPickerTime = new Date(time);
+    if (!source) {
+      initialPickerTime.setHours(12, 0, 0, 0);
+    }
+    setPickerDraftTime(initialPickerTime);
     setPickerDraftDate(hasDateInSource && source?.year && source?.month && source?.day ? new Date(source.year, source.month - 1, source.day) : new Date());
     setPickerDraftRepeat(source?.repeat || (source?.isDaily ? 'daily' : 'none'));
     setPickerDraftWeekdays(source?.weekdays || []);
@@ -250,61 +340,136 @@ export function NotificationModal({
         url,
       };
 
-      await onSave(values);
-      onClose();
+      const didSave = await onSave(values);
+
+      if (didSave) {
+        onClose();
+      }
     } finally {
       setIsSaving(false);
     }
   };
 
   const selectedTimeLabel = `${notificationTime.getHours().toString().padStart(2, '0')}:${notificationTime.getMinutes().toString().padStart(2, '0')}`;
-  const selectedDateLabel = hasDate
-    ? `${notificationDate.getDate().toString().padStart(2, '0')}/${(notificationDate.getMonth() + 1).toString().padStart(2, '0')}/${notificationDate.getFullYear()}`
-    : 'Не выбрана (сегодня)';
+  const selectedDateLabel = formatDateLabel(notificationDate);
+
   const selectedCityOption = cityOptions?.find((city) => city.id === selectedCityId) || null;
-  const repeatLabel =
-    repeat === 'none' ? 'Только сегодня'
-      : repeat === 'daily' ? 'Каждый день'
-        : repeat === 'weekly' ? 'Каждую неделю'
-          : repeat === 'monthly' ? 'Каждый месяц'
-            : 'Каждый год';
+
+  const repeatLabel = (() => {
+    if (weekdays.length > 0) {
+      return weekdays
+        .slice()
+        .sort((a, b) => a - b)
+        .map((d) => REPEAT_LABELS.weekdays[d as keyof typeof REPEAT_LABELS.weekdays])
+        .join(', ');
+    }
+
+    if (repeat === 'none') {
+      return null;
+    }
+
+    if (repeat === 'daily') {
+      return REPEAT_LABELS.daily;
+    }
+
+    if (repeat === 'weekly') {
+      return REPEAT_LABELS.weekly;
+    }
+
+    if (repeat === 'monthly') {
+      return REPEAT_LABELS.monthly;
+    }
+
+    return REPEAT_LABELS.yearly;
+  })();
+
   const weekdaysLabel = weekdays.length > 0
     ? weekdays
       .slice()
       .sort((a, b) => a - b)
-      .map((d) => (d === 0 ? 'Вс' : d === 1 ? 'Пн' : d === 2 ? 'Вт' : d === 3 ? 'Ср' : d === 4 ? 'Чт' : d === 5 ? 'Пт' : 'Сб'))
+      .map((d) => REPEAT_LABELS.weekdays[d as keyof typeof REPEAT_LABELS.weekdays])
       .join(', ')
-    : 'Не выбрано';
-  const canSave = mode === 'edit' || !cityOptions || selectedCityId !== null && selectedCityId !== undefined;
+    : REPEAT_LABELS.weekdaysNotSelected;
+
+  const canSelectCity =
+    citySelectionMode === 'selectable' &&
+    mode === 'add' &&
+    Boolean(cityOptions && cityOptions.length > 0 && onSelectCityId);
+
+  const canSave =
+    isTimeSelected &&
+    (mode === 'edit' || !cityOptions || selectedCityId !== null && selectedCityId !== undefined);
   const isPickerOpen = activePicker !== null;
+  const isCityPicker = activePicker === 'city';
   const effectiveTimezone = selectedCityOption?.timezone || cityTimezone;
+  const pickerTitle = (() => {
+    if (activePicker === 'city') {
+      return 'Choose City';
+    }
+
+    if (activePicker === 'time') {
+      return 'Choose Time';
+    }
+
+    if (activePicker === 'date') {
+      return 'Choose Date';
+    }
+
+    if (activePicker === 'weekdays') {
+      return 'Choose Weekdays';
+    }
+
+    return 'Choose Repeat';
+  })();
+  const modalTitle = (() => {
+    if (mode === 'edit') {
+      return 'Edit Notification';
+    }
+
+    if (citySelectionMode === 'locked') {
+      return 'Add Notification';
+    }
+
+    return 'New Notification';
+  })();
 
   const localPreviewInfo = useMemo(() => {
+    if (!isTimeSelected) {
+      return { dateText: 'Local time will appear after you choose a time', localTimeText: '', localDateText: '', monthOrYearShiftText: '', dayShiftText: '' };
+    }
+
     if (!effectiveTimezone) {
-      return { dateText: 'Локальное время появится после выбора города', dayShiftText: '' };
+      return { dateText: 'Local time will appear after you choose a city', localTimeText: '', localDateText: '', monthOrYearShiftText: '', dayShiftText: '' };
     }
 
     return getPreviewInfo(effectiveTimezone, notificationTime.getHours(), notificationTime.getMinutes());
-  }, [effectiveTimezone, notificationTime, hasDate, notificationDate]);
+  }, [effectiveTimezone, isTimeSelected, notificationTime, hasDate, notificationDate]);
+
   const timePickerLocalPreviewInfo = useMemo(() => {
     if (!effectiveTimezone) {
-      return { dateText: 'Локальное время появится после выбора города', dayShiftText: '' };
+      return { dateText: 'Local time will appear after you choose a city', localTimeText: '', localDateText: '', monthOrYearShiftText: '', dayShiftText: '' };
     }
 
     return getPreviewInfo(effectiveTimezone, pickerDraftTime.getHours(), pickerDraftTime.getMinutes());
   }, [effectiveTimezone, pickerDraftTime, hasDate, notificationDate]);
 
   const openTimePicker = () => {
-    setPickerDraftTime(new Date(notificationTime));
+    const nextPickerTime = new Date(notificationTime);
+
+    if (!isTimeSelected) {
+      nextPickerTime.setHours(12, 0, 0, 0);
+    }
+
+    setPickerDraftTime(nextPickerTime);
     setActivePicker('time');
   };
+
   const openCityPicker = () => {
     setPickerDraftCityId(selectedCityId ?? null);
     setActivePicker('city');
   };
 
   const openDatePicker = () => {
-    if (!isTimeSelected) return;
     setPickerDraftDate(new Date(notificationDate));
     setActivePicker('date');
   };
@@ -314,12 +479,19 @@ export function NotificationModal({
     setActivePicker('repeat');
   };
   const openWeekdaysPicker = () => {
-    setPickerDraftWeekdays(weekdays.length > 0 ? weekdays : [new Date().getDay()]);
+    setPickerDraftWeekdays(weekdays);
     setActivePicker('weekdays');
   };
 
   const closePicker = () => {
     setActivePicker(null);
+  };
+
+  const clearRepeat = () => {
+    setRepeat('none');
+    setWeekdays([]);
+    setPickerDraftRepeat('none');
+    setPickerDraftWeekdays([]);
   };
 
   const applyPicker = () => {
@@ -331,15 +503,22 @@ export function NotificationModal({
     if (activePicker === 'date') {
       setNotificationDate(pickerDraftDate);
       setHasDate(true);
+      setRepeat('none');
+      setWeekdays([]);
+      setPickerDraftRepeat('none');
+      setPickerDraftWeekdays([]);
     }
 
     if (activePicker === 'repeat') {
+      setHasDate(false);
       setRepeat(pickerDraftRepeat);
+      setWeekdays([]);
     }
 
     if (activePicker === 'weekdays') {
-      setRepeat(pickerDraftRepeat === 'none' ? 'weekly' : pickerDraftRepeat);
-      setWeekdays(pickerDraftWeekdays.length > 0 ? pickerDraftWeekdays : [new Date().getDay()]);
+      setHasDate(false);
+      setRepeat('weekly');
+      setWeekdays(pickerDraftWeekdays);
     }
 
     if (activePicker === 'city' && onSelectCityId && pickerDraftCityId !== null) {
@@ -350,134 +529,198 @@ export function NotificationModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <ImageBackground
+        source={require('@/assets/images/bg--main-1.jpg')}
+        style={styles.backgroundImage}
+        resizeMode="cover"
       >
-        <Pressable style={styles.modalOverlay} onPress={onClose} />
-        <View style={styles.modalContent}>
-          <ScrollView
-            style={styles.modalScroll}
-            contentContainerStyle={styles.modalScrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              {
+                paddingTop: insets.top,
+                paddingBottom: insets.bottom,
+              },
+            ]}
           >
-            <View style={styles.header}>
-              <View>
-                <Text style={styles.title}>{mode === 'edit' ? 'Редактировать уведомление' : 'Новое уведомление'}</Text>
-                <Text style={styles.subtitle}>{cityName}</Text>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              <View style={styles.header}>
+                <Pressable onPress={onClose} style={styles.headerButton}>
+                  <IconCancelOutlined fill="white" />
+                </Pressable>
+
+                <View>
+                  <Text style={styles.title}>{modalTitle}</Text>
+                </View>
+
+                <Pressable style={[styles.headerButton, !canSave && styles.headerButtonDisabled]} onPress={handleSave} disabled={isSaving || !canSave}>
+                  <IconConfirmOutlined fill="white" />
+                </Pressable>
               </View>
-              <Pressable onPress={onClose} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>Отмена</Text>
-              </Pressable>
-            </View>
 
-            {mode === 'add' && cityOptions && cityOptions.length > 0 && onSelectCityId && (
-              <Pressable style={styles.singleActionButton} onPress={openCityPicker}>
-                <Text style={styles.actionButtonText}>Выбрать город</Text>
-                <Text style={styles.actionButtonHint}>{selectedCityOption?.label || 'Выберите город'}</Text>
-              </Pressable>
-            )}
+              <View style={styles.content}>
+                {canSelectCity && (
+                  <Pressable style={[styles.actionButton, styles.citySelect]} onPress={openCityPicker}>
+                    {selectedCityOption?.label ? (
+                      <Text style={[styles.actionButtonText, styles.citySelectText]}>{selectedCityOption?.label}</Text>
+                    ) : (
+                      <Text style={[styles.actionButtonHintText, styles.actionButtonHintTextCity]}>Choose City...</Text>
+                    )}
+                    <IconArrow style={styles.citySelectIcon} fill='#fff' />
+                  </Pressable>
+                )}
 
-            <View style={styles.actionButtonsRow}>
-              <Pressable
-                style={[styles.actionButton, activePicker === 'time' && styles.actionButtonActive]}
-                onPress={openTimePicker}
-              >
-                <Text style={styles.actionButtonText}>Выбрать время</Text>
-                <Text style={styles.actionButtonHint}>{selectedTimeLabel}</Text>
-              </Pressable>
+                {!canSelectCity && citySelectionMode === 'locked' && !!cityName && (
+                  <View style={styles.cityTitle}>
+                    <Text style={styles.cityTitleText}>{cityName}</Text>
+                  </View>
+                )}
 
-              <Pressable
-                style={[
-                  styles.actionButton,
-                  activePicker === 'date' && styles.actionButtonActive,
-                  !isTimeSelected && styles.actionButtonDisabled,
-                ]}
-                onPress={openDatePicker}
-                disabled={!isTimeSelected}
-              >
-                <Text style={styles.actionButtonText}>Выбрать дату</Text>
-                <Text style={styles.actionButtonHint}>
-                  {isTimeSelected ? selectedDateLabel : 'Сначала выберите время'}
-                </Text>
-              </Pressable>
-            </View>
+                <TextInput
+                  style={styles.labelInput}
+                  placeholder="Title..."
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  value={notificationLabel}
+                  onChangeText={setNotificationLabel}
+                  multiline
+                />
 
-            <Pressable style={styles.singleActionButton} onPress={openRepeatPicker}>
-              <Text style={styles.actionButtonText}>Выбрать повторение</Text>
-              <Text style={styles.actionButtonHint}>{repeatLabel}</Text>
-            </Pressable>
+                <TextInput
+                  style={styles.notesInput}
+                  placeholder="Notes..."
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  value={notificationNotes}
+                  onChangeText={setNotificationNotes}
+                  multiline
+                />
 
-            <View style={styles.localPreviewBox}>
-              <Text style={styles.localPreviewLabel}>У вас локально это будет:</Text>
-              <Text style={styles.localPreviewValue}>{localPreviewInfo.dateText}</Text>
-              {!!localPreviewInfo.dayShiftText && (
-                <Text style={styles.dayShiftText}>{localPreviewInfo.dayShiftText}</Text>
-              )}
-            </View>
+                <TextInput
+                  style={styles.urlInput}
+                  placeholder="URL..."
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  value={notificationUrl}
+                  onChangeText={setNotificationUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
 
-            {hasDate && (
-              <Pressable style={styles.clearDateButton} onPress={() => setHasDate(false)}>
-                <Text style={styles.clearDateButtonText}>Очистить дату</Text>
-              </Pressable>
-            )}
+                <Pressable
+                  style={[styles.actionButton, activePicker === 'time' && styles.actionButtonActive]}
+                  onPress={openTimePicker}
+                >
+                  {isTimeSelected ? (
+                    <>
+                      <View style={styles.actionButtonHint}>
+                        <IconClock style={styles.actionButtonHintIcon} fill="rgba(255, 255, 255, 1)" />
+                        <Text style={styles.actionButtonText}>{selectedTimeLabel}</Text>
+                      </View>
+                      {selectedCityOption && (
+                        <View style={styles.localTimeBox}>
+                          <Text style={styles.localTimeLabel}>Your Time:</Text>
+                          <Text style={styles.localTime}>{localPreviewInfo.localTimeText}</Text>
+                          {!!localPreviewInfo.dayShiftText && (
+                            <Text style={styles.localTimeDayShift}>{localPreviewInfo.dayShiftText}</Text>
+                          )}
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <View style={styles.actionButtonHint}>
+                      <IconClock style={styles.actionButtonHintIcon} fill="rgba(255, 255, 255, 1)" />
+                      <Text style={styles.actionButtonHintText}>Time...</Text>
+                    </View>
+                  )}
+                </Pressable>
 
-            <Text style={styles.label}>Label</Text>
-            <TextInput
-              style={styles.metaInput}
-              placeholder="Add a label..."
-              placeholderTextColor="#7a7b92"
-              value={notificationLabel}
-              onChangeText={setNotificationLabel}
-            />
+                <Pressable
+                  style={[
+                    styles.actionButton,
+                    activePicker === 'date' && styles.actionButtonActive,
+                  ]}
+                  onPress={openDatePicker}
+                >
+                  {hasDate ? (
+                    <>
+                      <View style={styles.actionButtonHint}>
+                        <IconCalendar style={[styles.actionButtonHintIcon, styles.actionButtonHintIconCalendar]} fill="rgba(255, 255, 255, 1)" />
+                        <Text style={styles.actionButtonText}>{selectedDateLabel}</Text>
 
-            <Text style={styles.label}>Notes</Text>
-            <TextInput
-              style={styles.textAreaInput}
-              placeholder="Add notes..."
-              placeholderTextColor="#7a7b92"
-              value={notificationNotes}
-              onChangeText={setNotificationNotes}
-              multiline
-            />
+                        <Pressable style={styles.clearDateButton} onPress={() => setHasDate(false)}>
+                          <IconDelete fill="rgba(255, 255, 204, 1)" />
+                        </Pressable>
+                      </View>
+                      {!!localPreviewInfo.localDateText && (
+                        <View style={styles.localDateBox}>
+                          <Text style={styles.localDateLabel}>Your Date:</Text>
+                          <Text style={styles.localDate}>{localPreviewInfo.localDateText}</Text>
+                          {!!localPreviewInfo.monthOrYearShiftText && (
+                            <Text
+                              style={[
+                                styles.localDateShift,
+                                (localPreviewInfo.monthOrYearShiftText === DATE_SHIFT_LABELS.nextYear ||
+                                  localPreviewInfo.monthOrYearShiftText === DATE_SHIFT_LABELS.previousYear) &&
+                                  styles.localDateShiftYear,
+                              ]}
+                            >
+                              {localPreviewInfo.monthOrYearShiftText}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <View style={styles.actionButtonHint}>
+                      <IconCalendar style={[styles.actionButtonHintIcon, styles.actionButtonHintIconCalendar]} fill="rgba(255, 255, 255, 1)" />
+                      <Text style={styles.actionButtonHintText}>Date...</Text>
+                    </View>
+                  )}
+                </Pressable>
 
-            <Text style={styles.label}>URL</Text>
-            <TextInput
-              style={styles.metaInput}
-              placeholder="https://example.com"
-              placeholderTextColor="#7a7b92"
-              value={notificationUrl}
-              onChangeText={setNotificationUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
+                <Pressable style={styles.singleActionButton} onPress={openRepeatPicker}>
+                  {repeatLabel ? (
+                    <View style={styles.actionButtonHint}>
+                      <IconRepeat style={[styles.actionButtonHintIcon, styles.actionButtonHintIconRepeat]} fill="rgba(255, 255, 255, 1)" />
+                      <Text style={styles.actionButtonText}>{repeatLabel}</Text>
+                      <Pressable style={styles.clearDateButton} onPress={clearRepeat}>
+                        <IconDelete fill="rgba(255, 255, 204, 1)" />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.actionButtonHint}>
+                      <IconRepeat style={[styles.actionButtonHintIcon, styles.actionButtonHintIconRepeat]} fill="rgba(255, 255, 255, 1)" />
+                      <Text style={styles.actionButtonHintText}>{REPEAT_LABELS.chooseRepeat}</Text>
+                    </View>
+                  )}
+                </Pressable>
+              </View>
 
-            <Pressable style={[styles.primaryButton, !canSave && styles.primaryButtonDisabled]} onPress={handleSave} disabled={isSaving || !canSave}>
-              <Text style={styles.primaryButtonText}>{isSaving ? 'Сохранение...' : mode === 'edit' ? 'Сохранить' : 'Добавить'}</Text>
-            </Pressable>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </ImageBackground>
 
       <Modal visible={isPickerOpen} transparent animationType="fade" onRequestClose={closePicker}>
         <Pressable style={styles.pickerOverlay} onPress={closePicker}>
-          <Pressable style={[styles.pickerCard, activePicker === 'city' && styles.pickerCardCity]} onPress={() => undefined}>
-            <Text style={styles.pickerTitle}>
-              {activePicker === 'city'
-                ? 'Выберите город'
-                : activePicker === 'time'
-                ? 'Выберите время'
-                : activePicker === 'date'
-                  ? 'Выберите дату'
-                  : activePicker === 'weekdays'
-                    ? 'Выберите дни недели'
-                    : 'Выберите повторение'}
-            </Text>
+          <Pressable style={[styles.pickerCard, isCityPicker && styles.pickerCardCity]} onPress={() => undefined}>
+            <Text style={styles.pickerTitle}>{pickerTitle}</Text>
 
-            {activePicker === 'city' && cityOptions && (
+            {isCityPicker && cityOptions && (
               <ScrollView style={styles.cityPickerList}>
                 {cityOptions.map((city) => {
                   const selected = pickerDraftCityId === city.id;
@@ -513,7 +756,7 @@ export function NotificationModal({
                   textColor="#fff"
                 />
                 <View style={styles.localPreviewBox}>
-                  <Text style={styles.localPreviewLabel}>У вас локально это будет:</Text>
+                  <Text style={styles.localPreviewLabel}>Your local time will be:</Text>
                   <Text style={styles.localPreviewValue}>{timePickerLocalPreviewInfo.dateText}</Text>
                   {!!timePickerLocalPreviewInfo.dayShiftText && (
                     <Text style={styles.dayShiftText}>{timePickerLocalPreviewInfo.dayShiftText}</Text>
@@ -530,29 +773,64 @@ export function NotificationModal({
                 onChange={handleDateChange}
                 style={styles.datePicker}
                 textColor="#fff"
-                minimumDate={new Date()}
               />
             )}
 
             {activePicker === 'repeat' && (
               <View style={styles.repeatPickerList}>
-                <Pressable style={[styles.repeatPickerItem, pickerDraftRepeat === 'none' && styles.repeatPickerItemActive]} onPress={() => setPickerDraftRepeat('none')}>
-                  <Text style={styles.repeatPickerItemText}>Только сегодня</Text>
+                <Pressable
+                  style={[styles.repeatPickerItem, pickerDraftRepeat === 'none' && pickerDraftWeekdays.length === 0 && styles.repeatPickerItemActive]}
+                  onPress={() => {
+                    setPickerDraftRepeat('none');
+                    setPickerDraftWeekdays([]);
+                  }}
+                >
+                  <Text style={styles.repeatPickerItemText}>{REPEAT_LABELS.todayOnly}</Text>
                 </Pressable>
-                <Pressable style={[styles.repeatPickerItem, pickerDraftRepeat === 'daily' && styles.repeatPickerItemActive]} onPress={() => setPickerDraftRepeat('daily')}>
-                  <Text style={styles.repeatPickerItemText}>Каждый день</Text>
+                <Pressable
+                  style={[styles.repeatPickerItem, pickerDraftRepeat === 'daily' && pickerDraftWeekdays.length === 0 && styles.repeatPickerItemActive]}
+                  onPress={() => {
+                    setPickerDraftRepeat('daily');
+                    setPickerDraftWeekdays([]);
+                  }}
+                >
+                  <Text style={styles.repeatPickerItemText}>{REPEAT_LABELS.daily}</Text>
                 </Pressable>
-                <Pressable style={[styles.repeatPickerItem, pickerDraftRepeat === 'weekly' && styles.repeatPickerItemActive]} onPress={() => setPickerDraftRepeat('weekly')}>
-                  <Text style={styles.repeatPickerItemText}>Каждую неделю</Text>
+                <Pressable
+                  style={[styles.repeatPickerItem, pickerDraftRepeat === 'weekly' && pickerDraftWeekdays.length === 0 && styles.repeatPickerItemActive]}
+                  onPress={() => {
+                    setPickerDraftRepeat('weekly');
+                    setPickerDraftWeekdays([]);
+                  }}
+                >
+                  <Text style={styles.repeatPickerItemText}>{REPEAT_LABELS.weekly}</Text>
                 </Pressable>
-                <Pressable style={[styles.repeatPickerItem, pickerDraftRepeat === 'monthly' && styles.repeatPickerItemActive]} onPress={() => setPickerDraftRepeat('monthly')}>
-                  <Text style={styles.repeatPickerItemText}>Каждый месяц</Text>
+                <Pressable
+                  style={[styles.repeatPickerItem, pickerDraftRepeat === 'monthly' && pickerDraftWeekdays.length === 0 && styles.repeatPickerItemActive]}
+                  onPress={() => {
+                    setPickerDraftRepeat('monthly');
+                    setPickerDraftWeekdays([]);
+                  }}
+                >
+                  <Text style={styles.repeatPickerItemText}>{REPEAT_LABELS.monthly}</Text>
                 </Pressable>
-                <Pressable style={[styles.repeatPickerItem, pickerDraftRepeat === 'yearly' && styles.repeatPickerItemActive]} onPress={() => setPickerDraftRepeat('yearly')}>
-                  <Text style={styles.repeatPickerItemText}>Каждый год</Text>
+                <Pressable
+                  style={[styles.repeatPickerItem, pickerDraftRepeat === 'yearly' && pickerDraftWeekdays.length === 0 && styles.repeatPickerItemActive]}
+                  onPress={() => {
+                    setPickerDraftRepeat('yearly');
+                    setPickerDraftWeekdays([]);
+                  }}
+                >
+                  <Text style={styles.repeatPickerItemText}>{REPEAT_LABELS.yearly}</Text>
                 </Pressable>
-                <Pressable style={styles.repeatPickerSecondary} onPress={openWeekdaysPicker}>
-                  <Text style={styles.repeatPickerSecondaryText}>Выбрать дни недели</Text>
+                <Pressable
+                  style={[
+                    styles.repeatPickerSecondary,
+                    pickerDraftWeekdays.length > 0 && styles.repeatPickerItemActive
+                  ]}
+                  onPress={openWeekdaysPicker}
+                >
+                  <Text style={styles.repeatPickerSecondaryText}>{REPEAT_LABELS.chooseSpecificWeekdays}</Text>
                   <Text style={styles.repeatPickerSecondaryHint}>{weekdaysLabel}</Text>
                 </Pressable>
               </View>
@@ -562,13 +840,13 @@ export function NotificationModal({
               <View style={styles.repeatPickerList}>
                 <View style={styles.weekdaysWrap}>
                   {[
-                    { label: 'Пн', value: 1 },
-                    { label: 'Вт', value: 2 },
-                    { label: 'Ср', value: 3 },
-                    { label: 'Чт', value: 4 },
-                    { label: 'Пт', value: 5 },
-                    { label: 'Сб', value: 6 },
-                    { label: 'Вс', value: 0 },
+                    { label: REPEAT_LABELS.weekdays[1], value: 1 },
+                    { label: REPEAT_LABELS.weekdays[2], value: 2 },
+                    { label: REPEAT_LABELS.weekdays[3], value: 3 },
+                    { label: REPEAT_LABELS.weekdays[4], value: 4 },
+                    { label: REPEAT_LABELS.weekdays[5], value: 5 },
+                    { label: REPEAT_LABELS.weekdays[6], value: 6 },
+                    { label: REPEAT_LABELS.weekdays[0], value: 0 },
                   ].map((day) => {
                     const selected = pickerDraftWeekdays.includes(day.value);
                     return (
@@ -594,10 +872,10 @@ export function NotificationModal({
             {activePicker !== 'city' && (
               <View style={styles.pickerButtonsRow}>
                 <Pressable style={styles.pickerSecondaryButton} onPress={closePicker}>
-                  <Text style={styles.pickerSecondaryButtonText}>Отмена</Text>
+                  <Text style={styles.pickerSecondaryButtonText}>Cancel</Text>
                 </Pressable>
                 <Pressable style={styles.pickerPrimaryButton} onPress={applyPicker}>
-                  <Text style={styles.pickerPrimaryButtonText}>Применить</Text>
+                  <Text style={styles.pickerPrimaryButtonText}>Apply</Text>
                 </Pressable>
               </View>
             )}
@@ -609,21 +887,16 @@ export function NotificationModal({
 }
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+  },
   modalContainer: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(62, 63, 86, 0.4)',
   },
   modalContent: {
-    backgroundColor: 'rgba(62, 63, 86, 0.97)',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    minHeight: '65%',
-    maxHeight: '88%',
+    minHeight: '100%',
+    maxHeight: '100%',
   },
   modalScroll: {
     flexGrow: 0,
@@ -632,41 +905,94 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   header: {
+    paddingHorizontal: 33,
+    paddingTop: 20,
+    paddingBottom: 30,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
   },
   title: {
     color: '#fff',
-    fontSize: 19,
-    fontWeight: '600',
+    fontSize: 16
   },
   subtitle: {
-    color: '#9a9bb2',
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 13,
     marginTop: 2,
+    textAlign: 'center',
   },
-  closeButton: {
-    paddingVertical: 8,
+  headerButton: {
+    width: 30,
+    height: 30,
   },
-  closeButtonText: {
-    color: '#9a9bb2',
-    fontSize: 15,
+  headerButtonDisabled: {
+    opacity: 0.5,
+  },
+  content: {
+    paddingHorizontal: 20,
+  },
+  cityTitle: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 10,
+  },
+  cityTitleText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   actionButtonsRow: {
     flexDirection: 'row',
     gap: 10,
     marginBottom: 10,
   },
+  labelInput: {
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    color: '#ffffff',
+  },
+  notesInput: {
+    fontSize: 15,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    color: '#ffffff',
+  },
+  urlInput: {
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    marginBottom: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    color: '#ffffff',
+  },
   actionButton: {
-    flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 10,
   },
   actionButtonActive: {
     borderColor: '#4CAF50',
@@ -675,24 +1001,122 @@ const styles = StyleSheet.create({
   actionButtonDisabled: {
     opacity: 0.5,
   },
+  actionButtonTextCity: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   actionButtonText: {
+    fontSize: 15,
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
   actionButtonHint: {
-    color: '#9a9bb2',
-    marginTop: 4,
-    fontSize: 12,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  actionButtonHintText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  actionButtonHintTextCity: {
+    fontSize: 16,
+  },
+  citySelect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  citySelectText: {
+    flex: 1,
+    paddingRight: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  citySelectIcon: {
+    transform: [{ rotate: '90deg' }],
+    width: 7,
+    height: 12,
+    marginLeft: 'auto',
+    marginRight: 5,
+  },
+  actionButtonHintIcon: {
+    marginRight: 9,
+  },
+  actionButtonHintIconCalendar: {
+    marginLeft: 1,
+    marginRight: 9,
+  },
+  actionButtonHintIconRepeat: {
+    marginLeft: 1,
+    marginRight: 8,
   },
   singleActionButton: {
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     marginBottom: 10,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  notificationTime: {},
+  localTimeBox: {
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 11,
+    paddingTop: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  localTimeLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  localTime: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 1)',
+  },
+  notificationDate: {},
+  localDateBox: {
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 11,
+    paddingTop: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  localDateLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  localDate: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 1)',
+  },
+  localDateShift: {
+    fontSize: 11,
+    paddingHorizontal: 7,
+    height: 14,
+    borderRadius: 7,
+    lineHeight: 13,
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+    color: 'rgba(63, 68, 86, 0.9)',
+    marginLeft: 7,
+  },
+  localDateShiftYear: {
+    backgroundColor: 'rgba(255, 255, 204, 1)',
+  },
+  localTimeDayShift: {
+    fontSize: 11,
+    paddingHorizontal: 7,
+    height: 14,
+    borderRadius: 7,
+    lineHeight: 13,
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+    color: 'rgba(63, 68, 86, 0.9)',
+    marginLeft: 7,
   },
   repeatPickerList: {
     gap: 8,
@@ -787,12 +1211,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   clearDateButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  clearDateButtonText: {
-    color: '#ffb4ad',
-    fontSize: 13,
+    width: 20,
+    height: 20,
+    marginLeft: 'auto',
+    marginRight: 1,
+    marginBlock: -1,
   },
   datePicker: {
     height: 140,
@@ -824,8 +1247,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     color: '#fff',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)'
   },
   primaryButton: {
     height: 50,

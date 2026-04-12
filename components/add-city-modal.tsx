@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Text, View, TextInput, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { useDatabase } from '@/hooks/use-database';
+import { Text, View, TextInput, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform, ScrollView, ImageBackground } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SQLite from "expo-sqlite";
+
+import IconCancelOutlined from '@/assets/images/icon--x-1--outlined.svg';
+import IconCancelFilled from '@/assets/images/icon--x-1--filled.svg';
+
+import IconConfirmOutlined from '@/assets/images/icon--checkmark-1--outlined.svg';
+import IconConfirmFilled from '@/assets/images/icon--checkmark-1--filled.svg';
+
+import { useDatabase } from '@/hooks/use-database';
 
 export type CityRow = {
   id: number;
@@ -34,6 +42,7 @@ type AddCityModalProps = {
 };
 
 export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
+  const insets = useSafeAreaInsets();
   const { db } = useDatabase();
   const [query, setQuery] = useState('');
   const [cities, setCities] = useState<CityRow[]>([]);
@@ -95,112 +104,140 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
+      <ImageBackground
+        source={require('@/assets/images/bg--main-1.jpg')}
+        style={styles.backgroundImage}
+        resizeMode="cover"
       >
-        <Pressable style={styles.modalOverlay} onPress={onClose} />
-        <View style={styles.modalContent}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Add City</Text>
-            <Pressable onPress={onClose} style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>Cancel</Text>
-            </Pressable>
-          </View>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Search for a city..."
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-          />
-
-          {isLoading && <Text style={styles.loading}>Loading...</Text>}
-
-          <ScrollView style={styles.resultsList} showsVerticalScrollIndicator={false}>
-            {cities.map((city) => (
-              <Pressable
-                key={`${city.id}-${city.name}-${city.country}`}
-                onPress={() => handleCityPress(city)}
-                style={({ pressed }) => [
-                  styles.cityItem,
-                  selectedCity?.id === city.id && styles.cityItemSelected,
-                  pressed && styles.cityItemPressed,
-                ]}
-              >
-                <Text style={styles.cityText}>{city.name}, {city.country}</Text>
-                <Text style={styles.cityTimezone}>{city.tz}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-
-          <View style={styles.footer}>
-            <Pressable style={styles.footerSecondaryButton} onPress={onClose}>
-              <Text style={styles.footerSecondaryButtonText}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.footerPrimaryButton, !selectedCity && styles.footerPrimaryButtonDisabled]}
-              onPress={handleSave}
-              disabled={!selectedCity}
+        <View style={styles.modalBg}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalContainer}
+          >
+            <View
+              style={[
+                styles.safeArea,
+                {
+                  paddingTop: insets.top,
+                  paddingBottom: insets.bottom,
+                },
+              ]}
             >
-              <Text style={styles.footerPrimaryButtonText}>Save</Text>
-            </Pressable>
-          </View>
+              <View style={styles.modalContent}>
+                <View style={styles.header}>
+                  <Pressable style={styles.cancelButton} onPress={onClose}>
+                    <IconCancelOutlined
+                      fill="white"
+                    />
+                  </Pressable>
+
+                  <Text style={styles.title}>Add City</Text>
+
+                  <Pressable
+                    style={[styles.confirmButton, !selectedCity && styles.confirmButtonDisabled]}
+                    onPress={handleSave}
+                    disabled={!selectedCity}
+                  >
+                    <IconConfirmOutlined
+                      fill="white"
+                    />
+                  </Pressable>
+                </View>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter City Name..."
+                  placeholderTextColor='rgba(255, 255, 255, 0.5)'
+                  value={query}
+                  onChangeText={setQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus
+                />
+
+                {isLoading && <Text style={styles.loading}>Loading...</Text>}
+
+                <ScrollView style={styles.resultsList} showsVerticalScrollIndicator={false}>
+                  {cities.map((city) => (
+                    <Pressable
+                      key={`${city.id}-${city.name}-${city.country}`}
+                      onPress={() => handleCityPress(city)}
+                      style={({ pressed }) => [
+                        styles.cityItem,
+                        selectedCity?.id === city.id && styles.cityItemSelected,
+                        pressed && styles.cityItemPressed,
+                      ]}
+                    >
+                      <Text style={styles.cityText}>{city.name}, {city.country}</Text>
+                      <Text style={styles.cityTimezone}>{city.tz}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
+      </ImageBackground>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+  },
   modalContainer: {
     flex: 1,
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(62, 63, 86, 0.4)',
   },
-  modalOverlay: {
+  safeArea: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(62, 63, 86, 0.4)',
   },
   modalContent: {
-    backgroundColor: 'rgba(62, 63, 86, 0.95)',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    minHeight: '60%',
-    maxHeight: '80%',
+    minHeight: '100%',
+    maxHeight: '100%',
   },
   header: {
+    paddingHorizontal: 33,
+    paddingTop: 20,
+    paddingBottom: 30,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
   title: {
     fontSize: 20,
     fontWeight: '600',
     color: '#fff',
   },
-  closeButton: {
-    padding: 8,
+  cancelButton: {
+    width: 30,
+    height: 30,
   },
-  closeButtonText: {
-    color: '#9a9bb2',
-    fontSize: 16,
+  confirmButton: {
+    width: 30,
+    height: 30,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.5
   },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(90, 91, 115, 0.8)',
+    borderColor: 'rgba(255, 255, 255, 1)',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    marginLeft: 20,
+    marginRight: 20,
     marginBottom: 16,
-    backgroundColor: 'rgba(74, 75, 99, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     color: '#fff',
   },
   loading: {
@@ -209,16 +246,17 @@ const styles = StyleSheet.create({
   },
   resultsList: {
     flex: 1,
+    paddingHorizontal: 20,
   },
   cityItem: {
     paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#4a4b63',
+    paddingHorizontal: 13,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 6,
   },
   cityItemPressed: {
-    backgroundColor: '#4a4b63',
+    backgroundColor: 'rgba(62, 63, 86, 0.9)',
   },
   cityItemSelected: {
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
@@ -227,45 +265,13 @@ const styles = StyleSheet.create({
   },
   cityText: {
     fontSize: 16,
-    fontWeight: '500',
+    lineHeight: 16,
     color: '#fff',
+    marginBottom: 1,
   },
   cityTimezone: {
-    fontSize: 14,
-    color: '#9a9bb2',
-    marginTop: 2,
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  footerSecondaryButton: {
-    flex: 1,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  footerSecondaryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  footerPrimaryButton: {
-    flex: 1,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  footerPrimaryButtonDisabled: {
-    opacity: 0.5,
-  },
-  footerPrimaryButtonText: {
-    color: 'rgba(62, 63, 86, 1)',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 13,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
 });

@@ -1,5 +1,4 @@
 import { ThemeProvider } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ImageBackground, StyleSheet, Text, TextInput } from 'react-native';

@@ -1,17 +1,61 @@
-import { useCallback, useState } from 'react';
-import { Text, View, StyleSheet, Switch, Pressable, Linking } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
-import { useSettings, TimeFormat } from '@/contexts/settings-context';
-import { useEditMode } from '@/contexts/edit-mode-context';
-import { NotificationModal, NotificationFormValues } from '@/components/notification-modal';
 
-import IconRepeat from '@/assets/images/icon--repeat-1.svg';
-import IconLink from '@/assets/images/icon--link-1.svg';
-import IconEdit from '@/assets/images/icon--edit-2.svg';
-import IconDelete from '@/assets/images/icon--delete-3.svg';
+import { NotificationModal, NotificationFormValues } from '@/components/notification-modal';
+import { useEditMode } from '@/contexts/edit-mode-context';
+import { CityNotification, useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
+import { useSettings, TimeFormat } from '@/contexts/settings-context';
+
+import ClockIcon from '../../assets/images/icon--clock-2--outlined.svg';
+import CalendarIcon from '../../assets/images/icon--calendar-2--outlined.svg';
+import EditIcon from '../../assets/images/icon--edit-2.svg';
+import DeleteIcon from '../../assets/images/icon--delete-3.svg';
+import RepeatIcon from '../../assets/images/icon--repeat-1.svg';
+
+const CITY_TIME_REFRESH_INTERVAL_SECONDS = 5;
+const NOTIFICATION_SWITCH_THUMB_TRAVEL = 16;
+
+function NotificationToggleSwitch({
+  enabled,
+  onPress,
+}: {
+  enabled: boolean;
+  onPress: () => void;
+}) {
+  const thumbTranslateX = useState(() => new Animated.Value(enabled ? NOTIFICATION_SWITCH_THUMB_TRAVEL : 0))[0];
+
+  useEffect(() => {
+    Animated.timing(thumbTranslateX, {
+      toValue: enabled ? NOTIFICATION_SWITCH_THUMB_TRAVEL : 0,
+      duration: 300,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [enabled, thumbTranslateX]);
+
+  return (
+    <Pressable onPress={onPress} style={styles.toggleNotificationSwitch}>
+      <Animated.View
+        style={[
+          styles.toggleNotificationSwitchThumb,
+          { transform: [{ translateX: thumbTranslateX }] },
+        ]}
+      />
+    </Pressable>
+  );
+}
 
 function getDatePartsInTimezone(date: Date, timezone: string) {
   const fmt = new Intl.DateTimeFormat('en-US', {
@@ -22,6 +66,7 @@ function getDatePartsInTimezone(date: Date, timezone: string) {
   });
   const parts = fmt.formatToParts(date);
   const getPart = (type: string) => parseInt(parts.find((p) => p.type === type)?.value || '0', 10);
+
   return {
     year: getPart('year'),
     month: getPart('month'),
@@ -64,124 +109,7 @@ function getTriggerDateForTimezone(
   return new Date(now.getTime() + diffMs);
 }
 
-function formatTime(hour: number, minute: number, timeFormat: TimeFormat) {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: timeFormat === '12h',
-  }).format(new Date(2027, 0, 1, hour, minute));
-}
-
-function getTimezoneOffsetLabel(timezone: string): string {
-  const now = new Date();
-
-  const targetParts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(now);
-
-  const localParts = new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(now);
-
-  const getPart = (parts: Intl.DateTimeFormatPart[], type: string) =>
-    parseInt(parts.find((part) => part.type === type)?.value || '0', 10);
-
-  const targetMinutes =
-    getPart(targetParts, 'day') * 24 * 60 +
-    getPart(targetParts, 'hour') * 60 +
-    getPart(targetParts, 'minute');
-
-  const localMinutes =
-    getPart(localParts, 'day') * 24 * 60 +
-    getPart(localParts, 'hour') * 60 +
-    getPart(localParts, 'minute');
-
-  let diffMinutes = targetMinutes - localMinutes;
-
-  if (diffMinutes > 12 * 60) {
-    diffMinutes -= 24 * 60;
-  }
-
-  if (diffMinutes < -12 * 60) {
-    diffMinutes += 24 * 60;
-  }
-
-  const prefix = diffMinutes < 0 ? '-' : '+';
-  const absoluteMinutes = Math.abs(diffMinutes);
-  const hours = Math.floor(absoluteMinutes / 60);
-  const minutes = absoluteMinutes % 60;
-
-  if (minutes === 0) {
-    return `${prefix}${hours}`;
-  }
-
-  return `${prefix}${hours}:${minutes.toString().padStart(2, '0')}`;
-}
-
-function getLocalPreviewForNotification(
-  cityTz: string,
-  notification: NonNullable<SelectedCity['notifications']>[number],
-  timeFormat: TimeFormat
-) {
-  const now = new Date();
-
-  let cityYear: number;
-  let cityMonth: number;
-  let cityDay: number;
-
-  let triggerDate: Date;
-
-  if (notification.year && notification.month && notification.day && !notification.isDaily) {
-    cityYear = notification.year;
-    cityMonth = notification.month;
-    cityDay = notification.day;
-
-    triggerDate = getTriggerDateForTimezone(cityTz, cityYear, cityMonth, cityDay, notification.hour, notification.minute);
-  } else {
-    const cityNow = getDatePartsInTimezone(now, cityTz);
-
-    cityYear = cityNow.year;
-    cityMonth = cityNow.month;
-    cityDay = cityNow.day;
-
-    triggerDate = getTriggerDateForTimezone(cityTz, cityYear, cityMonth, cityDay, notification.hour, notification.minute);
-
-    if (triggerDate.getTime() <= now.getTime()) {
-      const next = new Date(cityYear, cityMonth - 1, cityDay + 1);
-      cityYear = next.getFullYear();
-      cityMonth = next.getMonth() + 1;
-      cityDay = next.getDate();
-
-      triggerDate = getTriggerDateForTimezone(cityTz, cityYear, cityMonth, cityDay, notification.hour, notification.minute);
-    }
-  }
-
-  const localText = new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: timeFormat === '12h',
-  }).format(triggerDate);
-
-  const localStamp = Date.UTC(triggerDate.getFullYear(), triggerDate.getMonth(), triggerDate.getDate());
-  const cityStamp = Date.UTC(cityYear, cityMonth - 1, cityDay);
-  const dayDiff = Math.round((localStamp - cityStamp) / 86400000);
-  const dayShiftText = dayDiff < 0 ? 'предыдущий день' : dayDiff > 0 ? 'следующий день' : '';
-
-  return { localText, dayShiftText };
-}
-
-function getNotificationScheduleLabel(notification: NonNullable<SelectedCity['notifications']>[number]): string | null {
+function getNotificationRepeatLabel(notification: CityNotification) {
   const normalizedRepeat = typeof notification.repeat === 'string'
     ? notification.repeat.toLowerCase()
     : undefined;
@@ -209,45 +137,246 @@ function getNotificationScheduleLabel(notification: NonNullable<SelectedCity['no
     return 'Sat';
   };
 
-  if (repeat === 'daily') return 'Daily';
-
   if (repeat === 'weekly') {
     const days = (notification.weekdays || []).slice().sort((a, b) => a - b).map(weekdayLabel);
-    return days.length > 0 ? `Weekly: ${days.join(', ')}` : 'Weekly';
+
+    return days.length > 0 ? `${days.join(', ')}` : 'Weekly';
   }
 
-  if (repeat === 'monthly') return 'Monthly';
+  if (repeat === 'daily') {
+    return 'Daily';
+  }
 
-  if (repeat === 'yearly') return 'Yearly';
+  if (repeat === 'monthly') {
+    return 'Monthly';
+  }
 
-  if (notification.day && notification.month && notification.year) {
-    const scheduledDate = new Date(notification.year, notification.month - 1, notification.day);
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).formatToParts(scheduledDate);
-    const getPart = (type: string) => parts.find((part) => part.type === type)?.value || '';
-    return `${getPart('weekday')} ${getPart('day')} ${getPart('month')}, ${getPart('year')}`;
+  if (repeat === 'yearly') {
+    return 'Yearly';
   }
 
   return null;
 }
 
+function getNotificationDateLabel(notification: CityNotification) {
+  if (notification.day && notification.month && notification.year) {
+    const scheduledDate = new Date(notification.year, notification.month - 1, notification.day);
+    const currentYear = new Date().getFullYear();
+    const includeYear = notification.year !== currentYear;
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      ...(includeYear ? { year: 'numeric' } : {}),
+    }).formatToParts(scheduledDate);
+    const getPart = (type: string) => parts.find((part) => part.type === type)?.value || '';
+    const baseLabel = `${getPart('weekday')} ${getPart('day')} ${getPart('month')}`;
+
+    if (includeYear) {
+      return `${baseLabel}, ${getPart('year')}`;
+    }
+
+    return baseLabel;
+  }
+
+  return null;
+}
+
+function formatDateLabel(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).formatToParts(date);
+  const getPart = (type: string) => parts.find((part) => part.type === type)?.value || '';
+
+  return `${getPart('weekday')} ${getPart('day')} ${getPart('month')}, ${getPart('year')}`;
+}
+
+function getNotificationTriggerDate(cityTz: string, notification: CityNotification) {
+  const now = new Date();
+
+  let cityYear: number;
+  let cityMonth: number;
+  let cityDay: number;
+  let triggerDate: Date;
+
+  if (notification.year && notification.month && notification.day && !notification.isDaily) {
+    cityYear = notification.year;
+    cityMonth = notification.month;
+    cityDay = notification.day;
+    triggerDate = getTriggerDateForTimezone(cityTz, cityYear, cityMonth, cityDay, notification.hour, notification.minute);
+  } else {
+    const cityNow = getDatePartsInTimezone(now, cityTz);
+    cityYear = cityNow.year;
+    cityMonth = cityNow.month;
+    cityDay = cityNow.day;
+    triggerDate = getTriggerDateForTimezone(cityTz, cityYear, cityMonth, cityDay, notification.hour, notification.minute);
+
+    if (triggerDate.getTime() <= now.getTime()) {
+      const next = new Date(cityYear, cityMonth - 1, cityDay + 1);
+      cityYear = next.getFullYear();
+      cityMonth = next.getMonth() + 1;
+      cityDay = next.getDate();
+      triggerDate = getTriggerDateForTimezone(cityTz, cityYear, cityMonth, cityDay, notification.hour, notification.minute);
+    }
+  }
+
+  return triggerDate;
+}
+
+function getNotificationCityTriggerDateParts(cityTz: string, notification: CityNotification) {
+  const now = new Date();
+  let cityYear: number;
+  let cityMonth: number;
+  let cityDay: number;
+
+  if (notification.year && notification.month && notification.day && !notification.isDaily) {
+    cityYear = notification.year;
+    cityMonth = notification.month;
+    cityDay = notification.day;
+  } else {
+    const cityNow = getDatePartsInTimezone(now, cityTz);
+    cityYear = cityNow.year;
+    cityMonth = cityNow.month;
+    cityDay = cityNow.day;
+
+    const sameDayTrigger = getTriggerDateForTimezone(
+      cityTz,
+      cityYear,
+      cityMonth,
+      cityDay,
+      notification.hour,
+      notification.minute
+    );
+
+    if (sameDayTrigger.getTime() <= now.getTime()) {
+      const next = new Date(cityYear, cityMonth - 1, cityDay + 1);
+      cityYear = next.getFullYear();
+      cityMonth = next.getMonth() + 1;
+      cityDay = next.getDate();
+    }
+  }
+
+  return {
+    year: cityYear,
+    month: cityMonth,
+    day: cityDay,
+  };
+}
+
+function getNotificationLocalDayShiftLabel(cityTz: string, notification: CityNotification) {
+  const cityTriggerDateParts = getNotificationCityTriggerDateParts(cityTz, notification);
+  const triggerDate = getNotificationTriggerDate(cityTz, notification);
+  const localStamp = Date.UTC(triggerDate.getFullYear(), triggerDate.getMonth(), triggerDate.getDate());
+  const cityStamp = Date.UTC(
+    cityTriggerDateParts.year,
+    cityTriggerDateParts.month - 1,
+    cityTriggerDateParts.day
+  );
+  const dayDiff = Math.round((localStamp - cityStamp) / 86400000);
+
+  if (dayDiff > 0) {
+    return 'Next day';
+  }
+
+  if (dayDiff < 0) {
+    return 'Previous day';
+  }
+
+  return null;
+}
+
+function getNotificationLocalMonthOrYearShiftLabel(cityTz: string, notification: CityNotification) {
+  const cityTriggerDateParts = getNotificationCityTriggerDateParts(cityTz, notification);
+  const triggerDate = getNotificationTriggerDate(cityTz, notification);
+  const localYear = triggerDate.getFullYear();
+  const localMonth = triggerDate.getMonth() + 1;
+
+  if (localYear > cityTriggerDateParts.year) {
+    return 'Next year';
+  }
+
+  if (localYear < cityTriggerDateParts.year) {
+    return 'Previous year';
+  }
+
+  if (localMonth > cityTriggerDateParts.month) {
+    return 'Next month';
+  }
+
+  if (localMonth < cityTriggerDateParts.month) {
+    return 'Previous month';
+  }
+
+  return null;
+}
+
+function getNotificationLocalTime(
+  cityTz: string,
+  notification: CityNotification,
+  timeFormat: TimeFormat
+) {
+  const triggerDate = getNotificationTriggerDate(cityTz, notification);
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: timeFormat === '12h',
+  }).format(triggerDate);
+}
+
+function getNotificationLocalDate(cityTz: string, notification: CityNotification) {
+  return formatDateLabel(getNotificationTriggerDate(cityTz, notification));
+}
+
+function getCurrentTimeInTimezone(timezone: string, timeFormat: TimeFormat) {
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: timeFormat === '12h',
+  }).format(new Date());
+}
+
+function formatScheduledTime(hour: number, minute: number, timeFormat: TimeFormat) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: timeFormat === '12h',
+  }).format(new Date(2027, 0, 1, hour, minute));
+}
+
 export default function Notifications() {
   const router = useRouter();
-  const { selectedCities, reorderCities, removeCity, toggleNotification, updateNotification } = useSelectedCities();
+  const isFocused = useIsFocused();
+  const { selectedCities, reorderCities, removeCity, removeNotification, toggleNotification, updateNotification } = useSelectedCities();
   const { timeFormat } = useSettings();
   const { isEditMode } = useEditMode();
+  const [, setClockTick] = useState(0);
 
   const [editingTarget, setEditingTarget] = useState<{
     city: SelectedCity;
-    notification: NonNullable<SelectedCity['notifications']>[number];
+    notification: CityNotification;
   } | null>(null);
 
+  useEffect(() => {
+    if (!isFocused) {
+      return;
+    }
+
+    setClockTick((value) => value + 1);
+
+    const interval = setInterval(() => {
+      setClockTick((value) => value + 1);
+    }, CITY_TIME_REFRESH_INTERVAL_SECONDS * 1000);
+
+    return () => clearInterval(interval);
+  }, [isFocused]);
+
   const citiesWithNotifications = selectedCities.filter(
-    city => city.notifications && city.notifications.length > 0
+    (city) => city.notifications && city.notifications.length > 0
   );
 
   const totalNotifications = citiesWithNotifications.reduce(
@@ -256,7 +385,11 @@ export default function Notifications() {
   );
 
   const handleToggleNotification = async (cityId: number, notificationId: string, enabled: boolean) => {
-    await toggleNotification(cityId, notificationId, enabled);
+    await toggleNotification(cityId, notificationId, !enabled);
+  };
+
+  const handleRemoveNotification = async (cityId: number, notificationId: string) => {
+    await removeNotification(cityId, notificationId);
   };
 
   const handleCityPress = (cityId: number) => {
@@ -265,22 +398,25 @@ export default function Notifications() {
     }
   };
 
-  const handleDelete = (cityId: number) => {
+  const handleDeleteCity = (cityId: number) => {
     removeCity(cityId);
   };
 
   const handleOpenUrl = async (url: string) => {
     const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
     const canOpen = await Linking.canOpenURL(withProtocol);
+
     if (canOpen) {
       await Linking.openURL(withProtocol);
     }
   };
 
   const handleSaveEditedNotification = async (values: NotificationFormValues) => {
-    if (!editingTarget) return;
+    if (!editingTarget) {
+      return false;
+    }
 
-    await updateNotification(
+    return await updateNotification(
       editingTarget.city.id,
       editingTarget.notification.id,
       values.hour,
@@ -295,7 +431,8 @@ export default function Notifications() {
       values.weekdays
     );
   };
-  const handleEditNotification = (city: SelectedCity, notification: NonNullable<SelectedCity['notifications']>[number]) => {
+
+  const handleEditNotification = (city: SelectedCity, notification: CityNotification) => {
     setEditingTarget({ city, notification });
   };
 
@@ -314,61 +451,36 @@ export default function Notifications() {
               </Pressable>
             )}
 
-            <Text style={styles.cityName}>{`${city.customName || city.name}, ${getTimezoneOffsetLabel(city.tz)}`}</Text>
+            <Text style={styles.cityName}>{city.customName || city.name}</Text>
+
+            <Text style={styles.cityHeaderTime}>{getCurrentTimeInTimezone(city.tz, timeFormat)}</Text>
 
             {isEditMode && (
-              <Pressable onPress={() => handleDelete(city.id)} style={styles.deleteButton}>
-                <Text style={styles.deleteButtonText}>-</Text>
+              <Pressable onPress={() => handleDeleteCity(city.id)} style={styles.deleteCityButton}>
+                <Text style={styles.deleteCityButtonText}>-</Text>
               </Pressable>
             )}
           </Pressable>
 
-          {city.notifications?.map((notification, idx) => (
-            (() => {
-              const preview = getLocalPreviewForNotification(city.tz, notification, timeFormat);
+          {city.notifications?.map((notification, idx) => {
+            const notificationDateLabel = getNotificationDateLabel(notification);
+            const notificationRepeatLabel = getNotificationRepeatLabel(notification);
+            const notificationLocalDayShiftLabel = getNotificationLocalDayShiftLabel(city.tz, notification);
+            const notificationLocalMonthOrYearShiftLabel = getNotificationLocalMonthOrYearShiftLabel(city.tz, notification);
 
-              const notificationScheduleLabel = getNotificationScheduleLabel(notification);
-
-              return (
-                <View key={notification.id} style={[
+            return (
+              <View
+                key={notification.id}
+                style={[
                   styles.notificationItem,
-                  idx + 1 === city.notifications?.length && styles.notificationItemLast
-                ]}>
-                  <View style={styles.notificationItemHeader}>
-                    <View style={styles.notificationItemHeaderText}>
-                      {(notification.label && notification.label.length > 0) ? (
-                        <Text style={styles.notificationLabel}>{notification.label}</Text>
-                      ) : (
-                        <Text style={styles.notificationLabelEmpty}>Notification</Text>
-                      )}
-                    </View>
-
-                    <Pressable style={styles.editButton} onPress={() => handleEditNotification(city, notification)}>
-                      <IconEdit fill='rgba(255, 255, 255, 1)' style={styles.editButtonIcon} />
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.notificationItemTime}>
-                    <Text style={styles.notificationTime}>
-                      {formatTime(notification.hour, notification.minute, timeFormat)}
-                    </Text>
-
-                    <Text style={styles.notificationLocalTime}>Your Time: {preview.localText}</Text>
-                  </View>
-
-                  {(notificationScheduleLabel || !!preview.dayShiftText) && (
-                    <View style={styles.notificationScheduleInfo}>
-                      {notificationScheduleLabel && (
-                        <View style={styles.notificationSchedule}>
-                          <IconRepeat fill='rgba(255, 255, 255, 1)' style={styles.notificationScheduleIcon} />
-                          <Text style={styles.notificationScheduleText}>{notificationScheduleLabel}</Text>
-                        </View>
-                      )}
-
-                      {!!preview.dayShiftText && (
-                        <Text style={styles.notificationDayShift}>{preview.dayShiftText}</Text>
-                      )}
-                    </View>
+                  idx % 2 === 1 && styles.notificationItemEven,
+                ]}
+              >
+                <View style={styles.notificationDetails}>
+                  {!!notification.label && notification.label.length > 0 ? (
+                    <Text style={styles.notificationLabel}>{notification.label}</Text>
+                  ) : (
+                    <Text style={styles.notificationLabelEmpty}>Notification</Text>
                   )}
 
                   {!!notification.notes && (
@@ -377,29 +489,116 @@ export default function Notifications() {
 
                   {!!notification.url && (
                     <Pressable onPress={() => handleOpenUrl(notification.url!)}>
-                      <View style={styles.notificationUrl}>
-                        <View style={styles.notificationUrlIcon}>
-                          <IconLink
-                            fill='rgba(62, 63, 86, 1)'
-                            style={styles.notificationUrlIconImg}
-                          />
-                        </View>
-                        <Text style={styles.notificationUrlText} numberOfLines={1}>{notification.url}</Text>
-                      </View>
+                      <Text style={styles.notificationUrl}>{notification.url}</Text>
                     </Pressable>
                   )}
-
-                  <Switch
-                    style={{ display: 'none' }}
-                    value={notification.enabled}
-                    onValueChange={(value) => handleToggleNotification(city.id, notification.id, value)}
-                    trackColor={{ false: '#3e3f56', true: '#4CAF50' }}
-                    thumbColor={notification.enabled ? '#fff' : '#9a9bb2'}
-                  />
                 </View>
-              );
-            })()
-          ))}
+
+                <View style={styles.notificationDateTime}>
+                  <View style={styles.notificationTime}>
+                    <View style={styles.notificationCityTime}>
+                      <ClockIcon
+                        style={styles.notificationCityTimeIcon}
+                        fill={'rgba(255, 255, 255, 1)'}
+                      />
+                      <Text style={styles.notificationCityTimeText}>
+                        {formatScheduledTime(notification.hour, notification.minute, timeFormat)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.notificationLocalTime}>
+                      <Text style={styles.notificationLocalTimeLabel}>
+                        Your Time:
+                      </Text>
+                      <Text style={styles.notificationLocalTimeText}>
+                        {getNotificationLocalTime(city.tz, notification, timeFormat)}
+                      </Text>
+
+                      {!!notificationLocalDayShiftLabel && (
+                        <Text style={styles.notificationLocalDayShiftText}>
+                          {notificationLocalDayShiftLabel}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {notificationDateLabel && (
+                    <View style={styles.notificationDate}>
+                      <View style={styles.notificationCityDate}>
+                        <CalendarIcon
+                          style={styles.notificationCityDateIcon}
+                          fill={'rgba(255, 255, 255, 1)'}
+                        />
+                        <Text style={styles.notificationCityDateText}>
+                          {notificationDateLabel}
+                        </Text>
+                      </View>
+
+                      <View style={styles.notificationLocalDate}>
+                        <Text style={styles.notificationLocalDateLabel}>
+                          Your Date:
+                        </Text>
+
+                        <Text style={styles.notificationLocalDateText}>
+                          {getNotificationLocalDate(city.tz, notification)}
+                        </Text>
+
+                        {!!notificationLocalMonthOrYearShiftLabel && (
+                          <Text
+                            style={[
+                              styles.notificationLocalDateShiftText,
+                              (notificationLocalMonthOrYearShiftLabel === 'Next year' ||
+                                notificationLocalMonthOrYearShiftLabel === 'Previous year') &&
+                                styles.notificationLocalDateShiftTextYear,
+                            ]}
+                          >
+                            {notificationLocalMonthOrYearShiftLabel}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {!!notificationRepeatLabel && (
+                    <View style={styles.notificationRepeat}>
+                      <RepeatIcon
+                        style={styles.notificationRepeatIcon}
+                        fill={'rgba(255, 255, 255, 1)'}
+                      />
+                      <Text style={styles.notificationRepeatText}>{notificationRepeatLabel}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.notificationActions}>
+                  <Pressable
+                    onPress={() => handleEditNotification(city, notification)}
+                    style={styles.editNotificationButton}
+                  >
+                    <EditIcon
+                      style={styles.editNotificationIcon}
+                      fill={'rgba(255, 255, 255, 1)'}
+                    />
+                  </Pressable>
+
+                  <NotificationToggleSwitch
+                    enabled={notification.enabled}
+                    onPress={() => handleToggleNotification(city.id, notification.id, notification.enabled)}
+                  />
+
+                  <Pressable
+                    onPress={() => handleRemoveNotification(city.id, notification.id)}
+                    style={styles.deleteNotificationButton}
+                  >
+                    <DeleteIcon
+                      style={styles.deleteNotificationIcon}
+                      fill={'rgba(255, 255, 204, 1)'}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
         </View>
       </ScaleDecorator>
     );
@@ -423,7 +622,7 @@ export default function Notifications() {
             data={citiesWithNotifications}
             onDragEnd={({ data }) => {
               const citiesWithoutNotifications = selectedCities.filter(
-                city => !city.notifications || city.notifications.length === 0
+                (city) => !city.notifications || city.notifications.length === 0
               );
               reorderCities([...data, ...citiesWithoutNotifications]);
             }}
@@ -438,6 +637,7 @@ export default function Notifications() {
         cityName={editingTarget ? (editingTarget.city.customName || editingTarget.city.name) : ''}
         cityTimezone={editingTarget?.city.tz}
         mode="edit"
+        citySelectionMode="locked"
         initialNotification={editingTarget?.notification || null}
         onClose={() => setEditingTarget(null)}
         onSave={handleSaveEditedNotification}
@@ -453,14 +653,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  listContent: {
-    paddingTop: 10,
-    paddingHorizontal: 10,
-  },
+  listContent: {},
   helperText: {
     color: '#9a9bb2',
     fontSize: 12,
     marginTop: 6,
+    marginLeft: 16,
   },
   emptyState: {
     flex: 1,
@@ -477,24 +675,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   cityGroup: {
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 10,
-    borderBottomRightRadius: 26,
+    borderBottomColor: 'rgba(62, 63, 86, 0.5)',
+    borderBottomWidth: 2,
   },
   cityGroupDragging: {
-    backgroundColor: 'rgba(62, 63, 86, 0.5)',
-    borderRadius: 8,
+    backgroundColor: 'rgba(62, 63, 86, 0.35)',
   },
   cityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingTop: 13,
-    paddingBottom: 11
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 17,
+    backgroundColor: 'rgba(62, 63, 86, 0.2)',
+    marginBottom: 1,
   },
   dragHandle: {
     padding: 4,
@@ -506,154 +700,216 @@ const styles = StyleSheet.create({
   },
   cityName: {
     flex: 1,
-    fontSize: 16,
-    lineHeight: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: 'bold',
     color: '#fff',
+    paddingHorizontal: 2,
   },
-  deleteButton: {
+  cityHeaderTime: {
+    fontSize: 20,
+    lineHeight: 26,
+    color: '#fff',
+    marginLeft: 12
+  },
+  deleteCityButton: {
     width: 28,
     height: 28,
     borderRadius: 14,
     backgroundColor: '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: 10,
   },
-  deleteButtonText: {
+  deleteCityButtonText: {
     color: 'white',
     fontSize: 20,
     fontWeight: '600',
     lineHeight: 22,
   },
   notificationItem: {
+    paddingTop: 17,
+    paddingBottom: 22,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(62, 63, 86, 0.2)',
+  },
+  notificationItemEven: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  notificationDetails: {
     flexDirection: 'column',
-    paddingVertical: 12,
-    paddingBottom: 6,
-    paddingLeft: 12,
-    paddingRight: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  notificationItemLast: {
-    borderBottomWidth: 0,
-  },
-  notificationItemHeader: {
-    display: 'flex',
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  notificationItemHeaderText: {
-    flex: 1,
-    flexShrink: 1,
-    flexBasis: 1,
-    marginRight: 8,
-    marginTop: 2,
+    gap: 4,
+    marginBottom: 18,
+    paddingHorizontal: 2,
   },
   notificationLabel: {
     fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '600',
     color: '#ffffff',
   },
   notificationLabelEmpty: {
     fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '300',
     color: '#ffffff',
-    fontWeight: '200',
-  },
-  editButton: {
-    borderRadius: 12,
-    flexBasis: 24,
-    width: 24,
-    height: 24,
-    backgroundColor: 'rgba(62, 63, 86, 0.4)',
-    marginLeft: 'auto',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editButtonIcon: {
-    width: 12,
-    height: 12,
-  },
-  editButtonText: {
-    color: '#007AFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  notificationItemTime: {
-    display: 'flex',
-    flexDirection: 'row',
-    marginBottom: 13,
-  },
-  notificationTime: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    textTransform: 'uppercase',
-  },
-  notificationLocalTime: {
-    fontSize: 14,
-    color: '#fff',
-    marginLeft: 'auto',
-  },
-  notificationScheduleInfo: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  notificationSchedule: {
-    display: 'flex',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 5
-  },
-  notificationScheduleIcon: {
-    width: 17,
-    height: 15,
-    marginLeft: 0,
-  },
-  notificationScheduleText: {
-    fontSize: 14,
-    color: '#fff',
-  },
-  notificationDayShift: {
-    fontSize: 11,
-    lineHeight: 17,
-    color: 'rgba(62, 63, 86, 0.9)',
-    borderRadius: 9,
-    height: 18,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    paddingHorizontal: 10,
-    marginLeft: 'auto',
   },
   notificationNotes: {
-    fontSize: 13,
-    lineHeight: 16,
-    color: '#ffffff',
-    marginBottom: 8,
+    fontSize: 15,
+    lineHeight: 18,
+    color: '#fff',
   },
   notificationUrl: {
-    display: 'flex',
+    fontSize: 15,
+    lineHeight: 18,
+    color: '#ffffcc',
+    textDecorationLine: 'underline',
+  },
+  notificationDateTime: {
+    flexDirection: 'column',
+    gap: 18,
+    paddingHorizontal: 2,
+  },
+  notificationTime: {
+    flexDirection: 'column',
+    gap: 5,
+  },
+  notificationCityTime: {
     flexDirection: 'row',
-    gap: 7,
-    marginBottom: 8,
-  },
-  notificationUrlIcon: {
-    width: 26,
-    height: 18,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    borderRadius: 9,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 7,
   },
-  notificationUrlIconImg: {
+  notificationCityTimeIcon: {
+    width: 16,
+    height: 16,
+  },
+  notificationCityTimeText: {
+    fontSize: 15,
+    color: '#fff',
+  },
+  notificationLocalTime: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  notificationLocalTimeLabel: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  notificationLocalTimeText: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 1)',
+  },
+  notificationLocalDayShiftText: {
+    fontSize: 11,
+    paddingHorizontal: 7,
+    height: 14,
+    borderRadius: 7,
+    lineHeight: 13,
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+    color: 'rgba(63, 68, 86, 0.9)',
+    marginBottom: -2,
+    marginLeft: 7,
+  },
+  notificationDate: {
+    flexDirection: 'column',
+    gap: 5,
+  },
+  notificationCityDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  notificationCityDateIcon: {
+    width: 14,
+    height: 14,
+    margin: 1,
+  },
+  notificationCityDateText: {
+    fontSize: 15,
+    color: '#fff',
+  },
+  notificationLocalDate: {
+    flexDirection: 'row',
+    gap: 3,
+  },
+  notificationLocalDateLabel: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.75)',
+  },
+  notificationLocalDateText: {
+    fontSize: 13,
+    color: '#fff',
+  },
+  notificationLocalDateShiftText: {
+    fontSize: 11,
+    paddingHorizontal: 7,
+    height: 14,
+    borderRadius: 7,
+    lineHeight: 13,
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+    color: 'rgba(63, 68, 86, 0.9)',
+    marginBottom: -2,
+    marginLeft: 7,
+  },
+  notificationLocalDateShiftTextYear: {
+    backgroundColor: 'rgba(255, 255, 204, 1)',
+  },
+  notificationRepeat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  notificationRepeatIcon: {
+    width: 17,
+    height: 15,
+  },
+  notificationRepeatText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 1)',
+  },
+  notificationActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingTop: 20,
+  },
+  editNotificationButton: {
+    width: 30,
+    height: 24,
+    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    borderRadius: 15,
+  },
+  editNotificationIcon: {
     width: 12,
     height: 12,
-    opacity: 0.7
+    margin: 'auto',
   },
-  notificationUrlText: {
-    fontSize: 13,
-    lineHeight: 16,
-    color: '#ffffff',
-    textDecorationLine: 'underline',
-  }
+  toggleNotificationSwitch: {
+    width: 33,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    padding: 3,
+  },
+  toggleNotificationSwitchThumb: {
+    width: 11,
+    height: 11,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    position: 'absolute',
+    top: 3,
+    left: 3,
+  },
+  deleteNotificationButton: {
+    width: 30,
+    height: 24,
+    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    borderRadius: 15,
+  },
+  deleteNotificationIcon: {
+    width: 12,
+    height: 12,
+    margin: 'auto',
+  },
 });

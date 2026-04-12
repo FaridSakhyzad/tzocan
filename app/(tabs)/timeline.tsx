@@ -673,7 +673,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(62, 63, 86, 0.16)',
   },
   listItemHeader: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 22,
     paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',

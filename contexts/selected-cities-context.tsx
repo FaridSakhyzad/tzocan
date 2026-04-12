@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { CityRow } from '@/components/add-city-modal';
@@ -18,12 +19,15 @@ export type CityNotification = {
   notes?: string;
   url?: string;
   enabled: boolean;
+  inactiveReason?: 'permission' | 'past';
   notificationId?: string;
   notificationIds?: string[];
   isDaily?: boolean;
 };
 
-export type SelectedCity = CityRow & {
+export type SelectedCity = Omit<CityRow, 'id'> & {
+  id: number;
+  cityId: number;
   customName?: string;
   notifications?: CityNotification[];
 };
@@ -34,14 +38,18 @@ type SelectedCitiesContextType = {
   removeCity: (cityId: number) => void;
   updateCityName: (cityId: number, customName: string) => void;
   reorderCities: (cities: SelectedCity[]) => void;
-  addNotification: (cityId: number, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat?: RepeatMode, weekdays?: number[]) => Promise<void>;
-  updateNotification: (cityId: number, notificationId: string, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat?: RepeatMode, weekdays?: number[]) => Promise<void>;
+  addNotification: (cityId: number, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat?: RepeatMode, weekdays?: number[]) => Promise<boolean>;
+  updateNotification: (cityId: number, notificationId: string, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat?: RepeatMode, weekdays?: number[]) => Promise<boolean>;
   removeNotification: (cityId: number, notificationId: string) => Promise<void>;
   toggleNotification: (cityId: number, notificationId: string, enabled: boolean) => Promise<boolean>;
   isLoaded: boolean;
 };
 
 const STORAGE_KEY = '@tzalac_cities';
+
+function generateSelectedCityId() {
+  return Date.now() + Math.floor(Math.random() * 1000);
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -92,6 +100,24 @@ function getTriggerDateForTimezone(
   const triggerDate = new Date(now.getTime() + diffMs);
 
   return triggerDate;
+}
+
+function isPastExplicitOneTimeNotification(
+  city: SelectedCity,
+  hour: number,
+  minute: number,
+  year?: number,
+  month?: number,
+  day?: number,
+  repeat: RepeatMode = 'none'
+) {
+  if (repeat !== 'none' || !year || !month || !day) {
+    return false;
+  }
+
+  const triggerDate = getTriggerDateForTimezone(city.tz, year, month, day, hour, minute);
+
+  return triggerDate.getTime() <= Date.now();
 }
 
 async function scheduleNotification(
@@ -297,11 +323,22 @@ async function requestNotificationPermissions(): Promise<boolean> {
   return finalStatus === 'granted';
 }
 
+async function hasNotificationPermissions(): Promise<boolean> {
+  const { status } = await Notifications.getPermissionsAsync();
+
+  return status === 'granted';
+}
+
 const SelectedCitiesContext = createContext<SelectedCitiesContextType | null>(null);
 
 export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
   const [selectedCities, setSelectedCities] = useState<SelectedCity[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const selectedCitiesRef = useRef<SelectedCity[]>([]);
+
+  useEffect(() => {
+    selectedCitiesRef.current = selectedCities;
+  }, [selectedCities]);
 
   useEffect(() => {
     loadCities();
@@ -313,18 +350,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          const migrated = parsed.map((city) => ({
-            ...city,
-            notifications: Array.isArray(city.notifications)
-              ? city.notifications.map((notification: CityNotification) => (
-                  notification.label || !notification.notes
-                    ? notification
-                    : { ...notification, label: notification.notes, notes: undefined }
-                ))
-              : city.notifications,
-          }));
-          setSelectedCities(migrated);
-          saveCities(migrated);
+          setSelectedCities(parsed);
         }
       }
     } catch (error) {
@@ -344,11 +370,12 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
 
   const addCity = (city: CityRow) => {
     setSelectedCities((prev) => {
-      const isAlreadySelected = prev.some((c) => c.id === city.id);
-      if (isAlreadySelected) {
-        return prev;
+      let nextId = generateSelectedCityId();
+      while (prev.some((selectedCity) => selectedCity.id === nextId)) {
+        nextId += 1;
       }
-      const newCities = [...prev, city];
+
+      const newCities = [...prev, { ...city, id: nextId, cityId: city.id }];
 
       saveCities(newCities);
 
@@ -384,20 +411,136 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
     saveCities(cities);
   };
 
-  const addNotification = async (cityId: number, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat: RepeatMode = 'none', weekdays: number[] = []) => {
-    const hasPermission = await requestNotificationPermissions();
-    if (!hasPermission) {
-      console.warn('Notification permissions not granted');
+  const reactivateInactiveNotifications = async () => {
+    if (!(await hasNotificationPermissions())) {
       return;
     }
 
-    const city = selectedCities.find(c => c.id === cityId);
-    if (!city) return;
+    const currentCities = selectedCitiesRef.current;
+    let didChange = false;
 
-    const notificationIds = await scheduleNotification(city, hour, minute, year, month, day, label, notes, url, repeat, weekdays);
+    const nextCities = await Promise.all(currentCities.map(async (city) => {
+      if (!city.notifications || city.notifications.length === 0) {
+        return city;
+      }
 
-    if (!notificationIds || notificationIds.length === 0) {
+      const nextNotifications = await Promise.all(city.notifications.map(async (notification) => {
+        if (!notification.enabled || !notification.inactiveReason) {
+          return notification;
+        }
+
+        if (notification.inactiveReason === 'past') {
+          return notification;
+        }
+
+        const notificationIds = await scheduleNotification(
+          city,
+          notification.hour,
+          notification.minute,
+          notification.year,
+          notification.month,
+          notification.day,
+          notification.label,
+          notification.notes,
+          notification.url,
+          notification.repeat || (notification.isDaily ? 'daily' : 'none'),
+          notification.weekdays || []
+        );
+
+        if (!notificationIds || notificationIds.length === 0) {
+          const nextInactiveReason = isPastExplicitOneTimeNotification(
+            city,
+            notification.hour,
+            notification.minute,
+            notification.year,
+            notification.month,
+            notification.day,
+            notification.repeat || (notification.isDaily ? 'daily' : 'none')
+          )
+            ? 'past'
+            : notification.inactiveReason;
+
+          if (nextInactiveReason !== notification.inactiveReason) {
+            didChange = true;
+            return {
+              ...notification,
+              inactiveReason: nextInactiveReason,
+              notificationId: undefined,
+              notificationIds: undefined,
+            };
+          }
+
+          return notification;
+        }
+
+        didChange = true;
+
+        return {
+          ...notification,
+          inactiveReason: undefined,
+          notificationId: notificationIds[0],
+          notificationIds,
+        };
+      }));
+
+      return {
+        ...city,
+        notifications: nextNotifications,
+      };
+    }));
+
+    if (didChange) {
+      setSelectedCities(nextCities);
+      saveCities(nextCities);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoaded) {
       return;
+    }
+
+    reactivateInactiveNotifications();
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        reactivateInactiveNotifications();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isLoaded]);
+
+  const addNotification = async (cityId: number, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat: RepeatMode = 'none', weekdays: number[] = []) => {
+    const city = selectedCitiesRef.current.find(c => c.id === cityId);
+    if (!city) return false;
+
+    const isInactivePastOneTime = isPastExplicitOneTimeNotification(
+      city,
+      hour,
+      minute,
+      year,
+      month,
+      day,
+      repeat
+    );
+
+    let notificationIds: string[] | null = null;
+
+    let inactiveReason: CityNotification['inactiveReason'] = isInactivePastOneTime ? 'past' : undefined;
+
+    if (!isInactivePastOneTime) {
+      const permissionGranted = await requestNotificationPermissions();
+
+      if (!permissionGranted) {
+        inactiveReason = 'permission';
+      } else {
+        notificationIds = await scheduleNotification(city, hour, minute, year, month, day, label, notes, url, repeat, weekdays);
+
+        if (!notificationIds || notificationIds.length === 0) {
+          return false;
+        }
+      }
     }
 
     const newNotification: CityNotification = {
@@ -413,8 +556,9 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
       notes,
       url,
       enabled: true,
-      notificationId: notificationIds[0],
-      notificationIds,
+      inactiveReason,
+      notificationId: notificationIds?.[0],
+      notificationIds: notificationIds || undefined,
       isDaily: repeat === 'daily',
     };
 
@@ -433,23 +577,48 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
 
       return newCities;
     });
+
+    return true;
   };
 
   const updateNotification = async (cityId: number, notificationId: string, hour: number, minute: number, year?: number, month?: number, day?: number, label?: string, notes?: string, url?: string, repeat: RepeatMode = 'none', weekdays: number[] = []) => {
-    const city = selectedCities.find(c => c.id === cityId);
+    const city = selectedCitiesRef.current.find(c => c.id === cityId);
     const notification = city?.notifications?.find(n => n.id === notificationId);
 
-    if (!city || !notification) return;
+    if (!city || !notification) return false;
 
-    // Cancel old notification
-    await cancelNotificationIds(notification);
+    const isInactivePastOneTime = isPastExplicitOneTimeNotification(
+      city,
+      hour,
+      minute,
+      year,
+      month,
+      day,
+      repeat
+    );
 
-    // Schedule new notification
-    const newSystemNotificationIds = await scheduleNotification(city, hour, minute, year, month, day, label, notes, url, repeat, weekdays);
+    let newSystemNotificationIds: string[] | null = null;
+    let inactiveReason: CityNotification['inactiveReason'] = isInactivePastOneTime ? 'past' : undefined;
 
-    if (!newSystemNotificationIds || newSystemNotificationIds.length === 0) {
-      return;
+    if (!notification.enabled) {
+      inactiveReason = undefined;
+    } else if (!isInactivePastOneTime) {
+      const permissionGranted = await requestNotificationPermissions();
+
+      if (!permissionGranted) {
+        inactiveReason = 'permission';
+      } else {
+        const newScheduledNotificationIds = await scheduleNotification(city, hour, minute, year, month, day, label, notes, url, repeat, weekdays);
+
+        if (!newScheduledNotificationIds || newScheduledNotificationIds.length === 0) {
+          return false;
+        }
+
+        newSystemNotificationIds = newScheduledNotificationIds;
+      }
     }
+
+    await cancelNotificationIds(notification);
 
     setSelectedCities((prev) => {
       const newCities = prev.map((c) => {
@@ -470,9 +639,10 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
                     label,
                     notes,
                     url,
-                    enabled: true,
-                    notificationId: newSystemNotificationIds[0],
-                    notificationIds: newSystemNotificationIds,
+                    enabled: notification.enabled,
+                    inactiveReason,
+                    notificationId: newSystemNotificationIds?.[0],
+                    notificationIds: newSystemNotificationIds || undefined,
                     isDaily: repeat === 'daily',
                   }
                 : n
@@ -486,10 +656,12 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
 
       return newCities;
     });
+
+    return true;
   };
 
   const removeNotification = async (cityId: number, notificationId: string) => {
-    const city = selectedCities.find(c => c.id === cityId);
+    const city = selectedCitiesRef.current.find(c => c.id === cityId);
     const notification = city?.notifications?.find(n => n.id === notificationId);
 
     if (notification) {
@@ -514,28 +686,49 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleNotification = async (cityId: number, notificationId: string, enabled: boolean): Promise<boolean> => {
-    const city = selectedCities.find(c => c.id === cityId);
+    const city = selectedCitiesRef.current.find(c => c.id === cityId);
     const notification = city?.notifications?.find(n => n.id === notificationId);
 
     if (!city || !notification) return false;
 
     if (enabled) {
-      const newNotificationId = await scheduleNotification(
+      const isInactivePastOneTime = isPastExplicitOneTimeNotification(
         city,
         notification.hour,
         notification.minute,
         notification.year,
         notification.month,
         notification.day,
-        notification.label,
-        notification.notes,
-        notification.url,
-        notification.repeat || (notification.isDaily ? 'daily' : 'none'),
-        notification.weekdays || []
+        notification.repeat || (notification.isDaily ? 'daily' : 'none')
       );
 
-      if (!newNotificationId || newNotificationId.length === 0) {
-        return false;
+      let newNotificationId: string[] | null = null;
+      let inactiveReason: CityNotification['inactiveReason'] = isInactivePastOneTime ? 'past' : undefined;
+
+      if (!isInactivePastOneTime) {
+        const permissionGranted = await requestNotificationPermissions();
+
+        if (!permissionGranted) {
+          inactiveReason = 'permission';
+        } else {
+          newNotificationId = await scheduleNotification(
+            city,
+            notification.hour,
+            notification.minute,
+            notification.year,
+            notification.month,
+            notification.day,
+            notification.label,
+            notification.notes,
+            notification.url,
+            notification.repeat || (notification.isDaily ? 'daily' : 'none'),
+            notification.weekdays || []
+          );
+
+          if (!newNotificationId || newNotificationId.length === 0) {
+            return false;
+          }
+        }
       }
 
       setSelectedCities((prev) => {
@@ -545,7 +738,13 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
               ...c,
               notifications: (c.notifications || []).map(n =>
                 n.id === notificationId
-                  ? { ...n, enabled: true, notificationId: newNotificationId[0], notificationIds: newNotificationId }
+                  ? {
+                      ...n,
+                      enabled: true,
+                      inactiveReason,
+                      notificationId: newNotificationId?.[0],
+                      notificationIds: newNotificationId || undefined,
+                    }
                   : n
               ),
             };
@@ -569,7 +768,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
               ...c,
               notifications: (c.notifications || []).map(n =>
                 n.id === notificationId
-                  ? { ...n, enabled: false, notificationId: undefined, notificationIds: undefined }
+                  ? { ...n, enabled: false, inactiveReason: undefined, notificationId: undefined, notificationIds: undefined }
                   : n
               ),
             };

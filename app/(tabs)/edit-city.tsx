@@ -76,7 +76,7 @@ function getNotificationRepeatLabel(notification: CityNotification) {
   if (repeat === 'weekly') {
     const days = (notification.weekdays || []).slice().sort((a, b) => a - b).map(weekdayLabel);
 
-    return days.length > 0 ? `Weekly: ${days.join(', ')}` : 'Weekly';
+    return days.length > 0 ? `${days.join(', ')}` : 'Weekly';
   }
 
   if (repeat === 'daily') {
@@ -517,7 +517,7 @@ export default function EditCity() {
 
   const handleSaveNotification = async (values: NotificationFormValues) => {
     if (editingNotification) {
-      await updateNotification(
+      return await updateNotification(
         city.id,
         editingNotification.id,
         values.hour,
@@ -531,10 +531,9 @@ export default function EditCity() {
         values.repeat,
         values.weekdays
       );
-      return;
     }
 
-    await addNotification(
+    return await addNotification(
       city.id,
       values.hour,
       values.minute,
@@ -565,7 +564,7 @@ export default function EditCity() {
   const relativeDayLabel = getRelativeDayLabel(city.tz);
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+    <>
       <ScrollView style={styles.container}>
         <View style={styles.editCityHeader}>
           <Text style={styles.cityName}>{city.name}</Text>
@@ -739,6 +738,7 @@ export default function EditCity() {
         cityName={city.customName || city.name}
         cityTimezone={city.tz}
         mode={editingNotification ? 'edit' : 'add'}
+        citySelectionMode="locked"
         initialNotification={editingNotification}
         onClose={() => {
           setIsNotificationModalVisible(false);
@@ -746,7 +746,7 @@ export default function EditCity() {
         }}
         onSave={handleSaveNotification}
       />
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -868,7 +868,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   notificationItemDisabled: {
-    opacity: 0.6
+    opacity: 0.5
   },
   notificationDetails: {
     flexDirection: 'column',

@@ -53,7 +53,6 @@ function HeaderButtons() {
   const [isDeleteCityModalVisible, setIsDeleteCityModalVisible] = React.useState(false);
   const lastActiveTabPathRef = React.useRef<'/' | '/index' | '/timeline' | '/notifications'>('/index');
 
-  const isOnEditablePage = pathname === '/' || pathname === '/index' || pathname === '/notifications' || pathname === '/timeline';
   const currentEditCityId = pathname === '/edit-city' && globalParams.cityId ? Number(globalParams.cityId) : null;
   const currentEditCity = React.useMemo(
     () => currentEditCityId ? selectedCities.find((city) => city.id === currentEditCityId) || null : null,
@@ -145,7 +144,7 @@ function HeaderButtons() {
     const defaultCityId =
       currentCityId && selectedCities.some((city) => city.id === currentCityId)
         ? currentCityId
-        : selectedCities[0]?.id ?? null;
+        : null;
 
     setSelectedNotificationCityId(defaultCityId);
     setIsAddNotificationModalVisible(true);
@@ -157,10 +156,10 @@ function HeaderButtons() {
 
   const handleSaveNotification = async (values: NotificationFormValues) => {
     if (!selectedNotificationCityId) {
-      return;
+      return false;
     }
 
-    await addNotification(
+    const didSave = await addNotification(
       selectedNotificationCityId,
       values.hour,
       values.minute,
@@ -174,7 +173,11 @@ function HeaderButtons() {
       values.weekdays
     );
 
-    setIsAddNotificationModalVisible(false);
+    if (didSave) {
+      setIsAddNotificationModalVisible(false);
+    }
+
+    return didSave;
   };
 
   return (
@@ -325,6 +328,7 @@ function HeaderButtons() {
         visible={isAddNotificationModalVisible}
         cityName={selectedNotificationCity ? (selectedNotificationCity.customName || selectedNotificationCity.name) : ''}
         mode="add"
+        citySelectionMode={pathname === '/edit-city' ? 'locked' : 'selectable'}
         cityOptions={notificationCityOptions}
         selectedCityId={selectedNotificationCityId}
         onSelectCityId={setSelectedNotificationCityId}
@@ -368,6 +372,8 @@ function CustomTabBar(props: BottomTabBarProps) {
 }
 
 export default function TabLayout() {
+  const pathname = usePathname();
+
   const colorScheme = useColorScheme();
 
   return (
@@ -393,7 +399,7 @@ export default function TabLayout() {
           freezeOnBlur: true,
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconBox}>
-              {focused ? (
+              {(focused || pathname === '/edit-city') ? (
                 <IconClockFilled
                   style={styles.icon}
                   fill="white"
@@ -477,7 +483,7 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.4)',
-    paddingHorizontal: 32
+    paddingHorizontal: 20
   },
   headerButton: {
     width: 30,

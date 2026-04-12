@@ -1,4 +1,6 @@
-import { Modal, View, Text, StyleSheet, Switch, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Linking, Modal, View, Text, StyleSheet, Switch, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { useSettings } from '@/contexts/settings-context';
 
 type SettingsModalProps = {
@@ -8,6 +10,39 @@ type SettingsModalProps = {
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { timeFormat, setTimeFormat } = useSettings();
+  const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
+  const [permissionCanAskAgain, setPermissionCanAskAgain] = useState(true);
+  const [isPermissionLoading, setIsPermissionLoading] = useState(false);
+
+  const refreshNotificationPermission = async () => {
+    const permission = await Notifications.getPermissionsAsync();
+    setPermissionGranted(permission.granted);
+    setPermissionCanAskAgain(permission.canAskAgain);
+  };
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    refreshNotificationPermission();
+  }, [visible]);
+
+  const handleEnableNotifications = async () => {
+    setIsPermissionLoading(true);
+
+    try {
+      const permission = await Notifications.requestPermissionsAsync();
+      setPermissionGranted(permission.granted);
+      setPermissionCanAskAgain(permission.canAskAgain);
+    } finally {
+      setIsPermissionLoading(false);
+    }
+  };
+
+  const handleOpenSettings = async () => {
+    await Linking.openSettings();
+  };
 
   return (
     <Modal
@@ -43,6 +78,35 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               thumbColor="white"
             />
           </View>
+
+          <View style={styles.settingCard}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Notifications</Text>
+              <Text style={styles.settingHint}>
+                {permissionGranted
+                  ? 'Notifications are enabled.'
+                  : permissionCanAskAgain
+                    ? 'Enable notifications to activate alerts from the app.'
+                    : 'Notifications are blocked. Open system settings to enable them again.'}
+              </Text>
+            </View>
+
+            {permissionGranted !== true && (
+              <Pressable
+                style={styles.permissionButton}
+                onPress={permissionCanAskAgain ? handleEnableNotifications : handleOpenSettings}
+                disabled={isPermissionLoading}
+              >
+                <Text style={styles.permissionButtonText}>
+                  {isPermissionLoading
+                    ? 'Loading...'
+                    : permissionCanAskAgain
+                      ? 'Enable Notifications'
+                      : 'Open Settings'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -64,6 +128,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 20,
     minHeight: '35%',
+    gap: 12,
   },
   header: {
     flexDirection: 'row',
@@ -104,5 +169,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9a9bb2',
     marginTop: 4,
+  },
+  settingCard: {
+    backgroundColor: 'rgba(74, 75, 99, 0.7)',
+    padding: 16,
+    borderRadius: 8,
+    gap: 12,
+  },
+  permissionButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  permissionButtonText: {
+    color: 'rgba(62, 63, 86, 1)',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

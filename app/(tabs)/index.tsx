@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   citiesList: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 0,
   },
   timeRulerDisabled: {
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   },
   cityItem: {
     paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingHorizontal: 2,
     borderRadius: 5,
     backgroundColor: 'rgba(62, 63, 86, 0)',
     borderBottomWidth: 1,
