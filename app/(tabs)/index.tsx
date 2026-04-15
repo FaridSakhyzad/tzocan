@@ -19,6 +19,8 @@ import IconDelete1 from '@/assets/images/icon--delete-1.svg';
 import IconNotification2 from '@/assets/images/icon--notification-2.svg';
 import IconNotificationsMultiple from '@/assets/images/icon--notifications-multiple-1.svg';
 
+const INDEX_CLOCK_REFRESH_INTERVAL_MS = 5000;
+
 function getLocalTime(timezone: string, timeFormat: TimeFormat, offsetMinutes: number = 0): string {
   const now = new Date();
   const shiftedTime = new Date(now.getTime() + offsetMinutes * 60 * 1000);
@@ -126,7 +128,7 @@ export default function Index() {
 
     const interval = setInterval(() => {
       setTick((t) => t * -1);
-    }, 1000);
+    }, INDEX_CLOCK_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [isFocused, selectedCities.length]);
@@ -148,7 +150,7 @@ export default function Index() {
 
   const handleEditCity = (city: SelectedCity) => {
     if (!isEditMode) {
-      router.push({ pathname: '/edit-city', params: { cityId: city.id.toString() } });
+      router.replace({ pathname: '/edit-city', params: { cityId: city.id.toString() } });
     }
   };
 

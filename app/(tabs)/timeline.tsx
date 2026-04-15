@@ -25,6 +25,8 @@ import IconNotification from '@/assets/images/icon--notification-2.svg';
 import IconReset from '@/assets/images/icon--reset-1.svg';
 import Arrow1 from '@/assets/images/icon--arrow-1.svg';
 
+const TIMELINE_CLOCK_REFRESH_INTERVAL_MS = 5000;
+
 function getTimezoneOffsetHours(timezone: string): number {
   const now = new Date();
 
@@ -392,7 +394,7 @@ export default function TimelineScreen() {
 
     const timer = setInterval(() => {
       setClockTick((t) => t + 1);
-    }, 1000);
+    }, TIMELINE_CLOCK_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(timer);
   }, [isFocused]);

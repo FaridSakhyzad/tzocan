@@ -14,9 +14,10 @@ import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-nativ
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { NotificationModal, NotificationFormValues } from '@/components/notification-modal';
+import { DeleteNotificationModal } from '@/components/delete-notification-modal';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { CityNotification, useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
-import { useSettings, TimeFormat } from '@/contexts/settings-context';
+import { useSettings, TimeFormat, FirstDayOfWeek } from '@/contexts/settings-context';
 
 import ClockIcon from '../../assets/images/icon--clock-2--outlined.svg';
 import CalendarIcon from '../../assets/images/icon--calendar-2--outlined.svg';
@@ -24,7 +25,7 @@ import EditIcon from '../../assets/images/icon--edit-2.svg';
 import DeleteIcon from '../../assets/images/icon--delete-3.svg';
 import RepeatIcon from '../../assets/images/icon--repeat-1.svg';
 
-const CITY_TIME_REFRESH_INTERVAL_SECONDS = 5;
+const NOTIFICATIONS_CITY_TIME_REFRESH_INTERVAL_MS = 5000;
 const NOTIFICATION_SWITCH_THUMB_TRAVEL = 16;
 
 function NotificationToggleSwitch({
@@ -109,7 +110,7 @@ function getTriggerDateForTimezone(
   return new Date(now.getTime() + diffMs);
 }
 
-function getNotificationRepeatLabel(notification: CityNotification) {
+function getNotificationRepeatLabel(notification: CityNotification, firstDayOfWeek: FirstDayOfWeek) {
   const normalizedRepeat = typeof notification.repeat === 'string'
     ? notification.repeat.toLowerCase()
     : undefined;
@@ -138,7 +139,14 @@ function getNotificationRepeatLabel(notification: CityNotification) {
   };
 
   if (repeat === 'weekly') {
-    const days = (notification.weekdays || []).slice().sort((a, b) => a - b).map(weekdayLabel);
+    const order = firstDayOfWeek === 'sunday'
+      ? [0, 1, 2, 3, 4, 5, 6]
+      : [1, 2, 3, 4, 5, 6, 0];
+    const sortOrder = new Map(order.map((value, index) => [value, index]));
+    const days = (notification.weekdays || [])
+      .slice()
+      .sort((a, b) => (sortOrder.get(a) ?? 0) - (sortOrder.get(b) ?? 0))
+      .map(weekdayLabel);
 
     return days.length > 0 ? `${days.join(', ')}` : 'Weekly';
   }
@@ -352,11 +360,15 @@ export default function Notifications() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { selectedCities, reorderCities, removeCity, removeNotification, toggleNotification, updateNotification } = useSelectedCities();
-  const { timeFormat } = useSettings();
+  const { timeFormat, firstDayOfWeek } = useSettings();
   const { isEditMode } = useEditMode();
   const [, setClockTick] = useState(0);
 
   const [editingTarget, setEditingTarget] = useState<{
+    city: SelectedCity;
+    notification: CityNotification;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
     city: SelectedCity;
     notification: CityNotification;
   } | null>(null);
@@ -370,7 +382,7 @@ export default function Notifications() {
 
     const interval = setInterval(() => {
       setClockTick((value) => value + 1);
-    }, CITY_TIME_REFRESH_INTERVAL_SECONDS * 1000);
+    }, NOTIFICATIONS_CITY_TIME_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [isFocused]);
@@ -388,13 +400,26 @@ export default function Notifications() {
     await toggleNotification(cityId, notificationId, !enabled);
   };
 
-  const handleRemoveNotification = async (cityId: number, notificationId: string) => {
-    await removeNotification(cityId, notificationId);
+  const handleOpenDeleteNotificationModal = (city: SelectedCity, notification: CityNotification) => {
+    setDeleteTarget({ city, notification });
+  };
+
+  const handleCloseDeleteNotificationModal = () => {
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteNotification = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    await removeNotification(deleteTarget.city.id, deleteTarget.notification.id);
+    setDeleteTarget(null);
   };
 
   const handleCityPress = (cityId: number) => {
     if (!isEditMode) {
-      router.push({ pathname: '/edit-city', params: { cityId: cityId.toString() } });
+      router.replace({ pathname: '/edit-city', params: { cityId: cityId.toString() } });
     }
   };
 
@@ -464,7 +489,7 @@ export default function Notifications() {
 
           {city.notifications?.map((notification, idx) => {
             const notificationDateLabel = getNotificationDateLabel(notification);
-            const notificationRepeatLabel = getNotificationRepeatLabel(notification);
+            const notificationRepeatLabel = getNotificationRepeatLabel(notification, firstDayOfWeek);
             const notificationLocalDayShiftLabel = getNotificationLocalDayShiftLabel(city.tz, notification);
             const notificationLocalMonthOrYearShiftLabel = getNotificationLocalMonthOrYearShiftLabel(city.tz, notification);
 
@@ -587,7 +612,7 @@ export default function Notifications() {
                   />
 
                   <Pressable
-                    onPress={() => handleRemoveNotification(city.id, notification.id)}
+                    onPress={() => handleOpenDeleteNotificationModal(city, notification)}
                     style={styles.deleteNotificationButton}
                   >
                     <DeleteIcon
@@ -641,6 +666,13 @@ export default function Notifications() {
         initialNotification={editingTarget?.notification || null}
         onClose={() => setEditingTarget(null)}
         onSave={handleSaveEditedNotification}
+      />
+
+      <DeleteNotificationModal
+        visible={Boolean(deleteTarget)}
+        notificationTitle={deleteTarget?.notification.label}
+        onClose={handleCloseDeleteNotificationModal}
+        onConfirm={handleConfirmDeleteNotification}
       />
     </GestureHandlerRootView>
   );

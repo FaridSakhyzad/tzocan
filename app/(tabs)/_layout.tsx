@@ -11,8 +11,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import IconAddLocationOutlined from '@/assets/images/icon--add-location-1--outlined.svg';
 import IconAddLocationFilled from '@/assets/images/icon--add-location-1--filled.svg';
 
-import IconSettingsOutlined from '@/assets/images/icon--settings-1--outlined.svg';
-import IconSettingsFilled from '@/assets/images/icon--settings-1--filled.svg';
+import IconMainMenuOutlined from '@/assets/images/icon--menu-1--outlined.svg';
+import IconMainMenuFilled from '@/assets/images/icon--menu-1--filled.svg';
 
 import IconClockOutlined from '@/assets/images/icon--clock-1--outlined.svg';
 import IconClockFilled from '@/assets/images/icon--clock-1--filled.svg';
@@ -34,7 +34,7 @@ import IconBack from '@/assets/images/icon--arrow-2--outlined.svg';
 import { AddCityModal, type CityRow } from '@/components/add-city-modal';
 import { DeleteCityModal } from '@/components/delete-city-modal';
 import { NotificationModal, type NotificationFormValues } from '@/components/notification-modal';
-import { SettingsModal } from '@/components/settings-modal';
+import { MainMenuModal } from '@/components/main-menu-modal';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { useSelectedCities } from '@/contexts/selected-cities-context';
 import IconDelete1 from '@/assets/images/icon--delete-2--outlined.svg';
@@ -49,11 +49,16 @@ function HeaderButtons() {
   const [isAddCityModalVisible, setIsAddCityModalVisible] = React.useState(false);
   const [isAddNotificationModalVisible, setIsAddNotificationModalVisible] = React.useState(false);
   const [selectedNotificationCityId, setSelectedNotificationCityId] = React.useState<number | null>(null);
-  const [isSettingsModalVisible, setIsSettingsModalVisible] = React.useState(false);
+  const [isMainMenuModalVisible, setIsMainMenuModalVisible] = React.useState(false);
   const [isDeleteCityModalVisible, setIsDeleteCityModalVisible] = React.useState(false);
   const lastActiveTabPathRef = React.useRef<'/' | '/index' | '/timeline' | '/notifications'>('/index');
+  const isEditCityScreen = pathname === '/edit-city';
+  const isContactScreen = pathname === '/contact';
+  const isSettingsScreen = pathname === '/settings';
+  const isAboutScreen = pathname === '/about';
+  const isDetailScreen = isEditCityScreen || isContactScreen || isSettingsScreen || isAboutScreen;
 
-  const currentEditCityId = pathname === '/edit-city' && globalParams.cityId ? Number(globalParams.cityId) : null;
+  const currentEditCityId = isEditCityScreen && globalParams.cityId ? Number(globalParams.cityId) : null;
   const currentEditCity = React.useMemo(
     () => currentEditCityId ? selectedCities.find((city) => city.id === currentEditCityId) || null : null,
     [currentEditCityId, selectedCities]
@@ -95,16 +100,16 @@ function HeaderButtons() {
     setIsAddCityModalVisible(false);
   };
 
-  const handleOpenSettingsModal = () => {
+  const handleOpenMainMenuModal = () => {
     if (isEditMode) {
       return;
     }
 
-    setIsSettingsModalVisible(true);
+    setIsMainMenuModalVisible(true);
   };
 
-  const handleCloseSettingsModal = () => {
-    setIsSettingsModalVisible(false);
+  const handleCloseMainMenuModal = () => {
+    setIsMainMenuModalVisible(false);
   };
 
   const handleOpenDeleteCityModal = () => {
@@ -131,6 +136,30 @@ function HeaderButtons() {
 
   const handleBackFromEditCity = () => {
     router.navigate(lastActiveTabPathRef.current);
+  };
+
+  const handleOpenContactScreen = () => {
+    if (isEditMode) {
+      return;
+    }
+
+    router.replace('/contact');
+  };
+
+  const handleOpenSettingsScreen = () => {
+    if (isEditMode) {
+      return;
+    }
+
+    router.replace('/settings');
+  };
+
+  const handleOpenAboutScreen = () => {
+    if (isEditMode) {
+      return;
+    }
+
+    router.replace('/about');
   };
 
   const handleOpenAddNotificationModal = () => {
@@ -186,7 +215,7 @@ function HeaderButtons() {
         ...styles.headerButtonsContainer,
         paddingTop: insets.top + 15,
       }}>
-        {pathname === '/edit-city' && (
+        {isEditCityScreen && (
           <>
             <Pressable
               onPress={handleBackFromEditCity}
@@ -235,7 +264,22 @@ function HeaderButtons() {
           </>
         )}
 
-        {pathname !== '/edit-city' && (
+        {(isContactScreen || isSettingsScreen || isAboutScreen) && (
+          <Pressable
+            onPress={handleBackFromEditCity}
+            style={[
+              styles.headerButton,
+              styles.headerButtonBack,
+            ]}
+          >
+            <IconBack
+              style={styles.headerButtonIcon}
+              fill="#fff"
+            />
+          </Pressable>
+        )}
+
+        {!isDetailScreen && (
           <>
             <Pressable
               onPress={toggleEditMode}
@@ -294,7 +338,7 @@ function HeaderButtons() {
             </Pressable>
 
             <Pressable
-              onPress={handleOpenSettingsModal}
+              onPress={handleOpenMainMenuModal}
               disabled={isEditMode}
               style={[
                 styles.headerButton,
@@ -302,13 +346,13 @@ function HeaderButtons() {
                 styles.headerButtonSettings,
               ]}
             >
-              {isSettingsModalVisible ? (
-                <IconSettingsFilled
+              {isMainMenuModalVisible ? (
+                <IconMainMenuFilled
                   style={styles.headerButtonIcon}
                   fill="white"
                 />
               ) : (
-                <IconSettingsOutlined
+                <IconMainMenuOutlined
                   style={styles.headerButtonIcon}
                   fill="white"
                 />
@@ -337,9 +381,15 @@ function HeaderButtons() {
         onSave={handleSaveNotification}
       />
 
-      <SettingsModal
-        visible={isSettingsModalVisible}
-        onClose={handleCloseSettingsModal}
+      <MainMenuModal
+        visible={isMainMenuModalVisible}
+        onClose={handleCloseMainMenuModal}
+        onAddNotification={handleOpenAddNotificationModal}
+        onAddCity={handleOpenAddCityModal}
+        onContact={handleOpenContactScreen}
+        onSettings={handleOpenSettingsScreen}
+        onAbout={handleOpenAboutScreen}
+        canAddNotification={selectedCities.length > 0}
       />
 
       <DeleteCityModal
@@ -448,6 +498,27 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="edit-city"
+        options={{
+          title: '',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="contact"
+        options={{
+          title: '',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: '',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="about"
         options={{
           title: '',
           href: null,

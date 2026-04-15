@@ -15,6 +15,7 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CityNotification } from '@/contexts/selected-cities-context';
+import { useSettings } from '@/contexts/settings-context';
 import IconCancelOutlined from '@/assets/images/icon--x-1--outlined.svg';
 import IconConfirmOutlined from '@/assets/images/icon--checkmark-1--outlined.svg';
 
@@ -96,6 +97,7 @@ export function NotificationModal({
   onClose,
   onSave,
 }: NotificationModalProps) {
+  const { firstDayOfWeek } = useSettings();
   const insets = useSafeAreaInsets();
   const [notificationDate, setNotificationDate] = useState(new Date());
   const [notificationTime, setNotificationTime] = useState(() => {
@@ -359,12 +361,16 @@ export function NotificationModal({
   const selectedDateLabel = formatDateLabel(notificationDate);
 
   const selectedCityOption = cityOptions?.find((city) => city.id === selectedCityId) || null;
+  const weekdayOrder = firstDayOfWeek === 'sunday'
+    ? [0, 1, 2, 3, 4, 5, 6]
+    : [1, 2, 3, 4, 5, 6, 0];
+  const weekdaySortOrder = new Map(weekdayOrder.map((value, index) => [value, index]));
 
   const repeatLabel = (() => {
     if (weekdays.length > 0) {
       return weekdays
         .slice()
-        .sort((a, b) => a - b)
+        .sort((a, b) => (weekdaySortOrder.get(a) ?? 0) - (weekdaySortOrder.get(b) ?? 0))
         .map((d) => REPEAT_LABELS.weekdays[d as keyof typeof REPEAT_LABELS.weekdays])
         .join(', ');
     }
@@ -499,6 +505,16 @@ export function NotificationModal({
 
   const closePicker = () => {
     setActivePicker(null);
+  };
+
+  const handleClosePicker = () => {
+    if (activePicker === 'weekdays') {
+      setActivePicker('repeat');
+
+      return;
+    }
+
+    closePicker();
   };
 
   const clearRepeat = () => {
@@ -733,7 +749,7 @@ export function NotificationModal({
       <NotificationPickerModal
         visible={isPickerOpen}
         title={pickerTitle}
-        onClose={closePicker}
+        onClose={handleClosePicker}
         onApply={applyPicker}
         showActions={activePicker !== 'city'}
         wide={isCityPicker}
@@ -864,7 +880,7 @@ export function NotificationModal({
             >
               <Text style={[
                 styles.repeatPickerItemText,
-                pickerDraftRepeat === 'weekly' && pickerDraftWeekdays.length === 0 && styles.repeatPickerItemTextctive
+                pickerDraftRepeat === 'weekly' && pickerDraftWeekdays.length === 0 && styles.repeatPickerItemTextActive
               ]}>{REPEAT_LABELS.weekly}</Text>
             </Pressable>
 
@@ -910,13 +926,10 @@ export function NotificationModal({
           <View style={styles.repeatPickerList}>
             <View style={styles.weekdaysWrap}>
               {[
-                { label: REPEAT_LABELS.weekdays[1], value: 1 },
-                { label: REPEAT_LABELS.weekdays[2], value: 2 },
-                { label: REPEAT_LABELS.weekdays[3], value: 3 },
-                { label: REPEAT_LABELS.weekdays[4], value: 4 },
-                { label: REPEAT_LABELS.weekdays[5], value: 5 },
-                { label: REPEAT_LABELS.weekdays[6], value: 6 },
-                { label: REPEAT_LABELS.weekdays[0], value: 0 },
+                ...weekdayOrder.map((value) => ({
+                  label: REPEAT_LABELS.weekdays[value as keyof typeof REPEAT_LABELS.weekdays],
+                  value,
+                })),
               ].map((day, idx) => {
                 const selected = pickerDraftWeekdays.includes(day.value);
                 return (

@@ -13,6 +13,7 @@ const TOTAL_TICKS = TOTAL_MINUTES / MINUTES_PER_TICK;
 const NUMBER_OF_DUMMIES = Math.ceil(SCREEN_WIDTH / TICK_WIDTH);
 const RULER_WIDTH = TOTAL_TICKS * TICK_WIDTH + NUMBER_OF_DUMMIES * TICK_WIDTH;
 const SNAP_TO_ZERO_THRESHOLD = 3;
+const TIME_RULER_REFRESH_INTERVAL_MS = 5000;
 
 type TimeFormat = '12h' | '24h';
 
@@ -124,7 +125,7 @@ export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeR
 
     const interval = setInterval(() => {
       setTick((t) => t + 1);
-    }, 1000);
+    }, TIME_RULER_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [isActive]);

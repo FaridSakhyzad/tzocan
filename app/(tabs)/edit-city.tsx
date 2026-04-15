@@ -12,9 +12,11 @@ import {
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSelectedCities, CityNotification } from '@/contexts/selected-cities-context';
-import { useSettings, TimeFormat } from '@/contexts/settings-context';
+import { useSettings, TimeFormat, FirstDayOfWeek } from '@/contexts/settings-context';
 import { NotificationModal, NotificationFormValues } from '@/components/notification-modal';
+import { DeleteNotificationModal } from '@/components/delete-notification-modal';
 import { getCountryName } from '@/constants/country-names';
 
 import ClockIcon from '../../assets/images/icon--clock-2--outlined.svg';
@@ -23,7 +25,7 @@ import EditIcon from '../../assets/images/icon--edit-2.svg';
 import DeleteIcon from '../../assets/images/icon--delete-3.svg';
 import RepeatIcon from '../../assets/images/icon--repeat-1.svg';
 
-const CITY_TIME_REFRESH_INTERVAL_SECONDS = 5;
+const EDIT_CITY_TIME_REFRESH_INTERVAL_MS = 5000;
 const NOTIFICATION_SWITCH_THUMB_TRAVEL = 16;
 
 function NotificationToggleSwitch({
@@ -59,7 +61,7 @@ function NotificationToggleSwitch({
   );
 }
 
-function getNotificationRepeatLabel(notification: CityNotification) {
+function getNotificationRepeatLabel(notification: CityNotification, firstDayOfWeek: FirstDayOfWeek) {
   const repeat = notification.repeat || (notification.isDaily ? 'daily' : 'none');
 
   const weekdayLabel = (d: number) => {
@@ -74,7 +76,14 @@ function getNotificationRepeatLabel(notification: CityNotification) {
   };
 
   if (repeat === 'weekly') {
-    const days = (notification.weekdays || []).slice().sort((a, b) => a - b).map(weekdayLabel);
+    const order = firstDayOfWeek === 'sunday'
+      ? [0, 1, 2, 3, 4, 5, 6]
+      : [1, 2, 3, 4, 5, 6, 0];
+    const sortOrder = new Map(order.map((value, index) => [value, index]));
+    const days = (notification.weekdays || [])
+      .slice()
+      .sort((a, b) => (sortOrder.get(a) ?? 0) - (sortOrder.get(b) ?? 0))
+      .map(weekdayLabel);
 
     return days.length > 0 ? `${days.join(', ')}` : 'Weekly';
   }
@@ -472,9 +481,10 @@ function getUtcOffsetLabel(timezone: string) {
 
 export default function EditCity() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { cityId } = useLocalSearchParams<{ cityId: string }>();
   const { selectedCities, updateCityName, addNotification, updateNotification, removeNotification, toggleNotification } = useSelectedCities();
-  const { timeFormat } = useSettings();
+  const { timeFormat, firstDayOfWeek } = useSettings();
   const [, setClockTick] = useState(0);
 
   const city = selectedCities.find(c => c.id === Number(cityId));
@@ -482,6 +492,7 @@ export default function EditCity() {
   const [editName, setEditName] = useState(city?.customName || '');
   const [isNotificationModalVisible, setIsNotificationModalVisible] = useState(false);
   const [editingNotification, setEditingNotification] = useState<CityNotification | null>(null);
+  const [notificationPendingDelete, setNotificationPendingDelete] = useState<CityNotification | null>(null);
 
   useEffect(() => {
     if (city) {
@@ -490,12 +501,18 @@ export default function EditCity() {
   }, [city?.customName]);
 
   useEffect(() => {
+    if (!isFocused) {
+      return;
+    }
+
+    setClockTick((value) => value + 1);
+
     const interval = setInterval(() => {
       setClockTick((value) => value + 1);
-    }, CITY_TIME_REFRESH_INTERVAL_SECONDS * 1000);
+    }, EDIT_CITY_TIME_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isFocused]);
 
   if (!city) {
     return (
@@ -553,8 +570,21 @@ export default function EditCity() {
     setIsNotificationModalVisible(true);
   };
 
-  const handleRemoveNotification = async (notificationId: string) => {
-    await removeNotification(city.id, notificationId);
+  const handleOpenDeleteNotificationModal = (notification: CityNotification) => {
+    setNotificationPendingDelete(notification);
+  };
+
+  const handleCloseDeleteNotificationModal = () => {
+    setNotificationPendingDelete(null);
+  };
+
+  const handleConfirmDeleteNotification = async () => {
+    if (!notificationPendingDelete) {
+      return;
+    }
+
+    await removeNotification(city.id, notificationPendingDelete.id);
+    setNotificationPendingDelete(null);
   };
 
   const handleToggleNotification = async (notificationId: string, enabled: boolean) => {
@@ -601,7 +631,7 @@ export default function EditCity() {
             <View style={styles.notificationsList}>
               {city.notifications.map((notification, idx) => {
                 const notificationDateLabel = getNotificationDateLabel(notification);
-                const notificationRepeatLabel = getNotificationRepeatLabel(notification);
+                const notificationRepeatLabel = getNotificationRepeatLabel(notification, firstDayOfWeek);
                 const notificationLocalDayShiftLabel = getNotificationLocalDayShiftLabel(city.tz, notification);
                 const notificationLocalMonthOrYearShiftLabel = getNotificationLocalMonthOrYearShiftLabel(city.tz, notification);
 
@@ -716,7 +746,7 @@ export default function EditCity() {
                       />
 
                       <Pressable
-                        onPress={() => handleRemoveNotification(notification.id)}
+                        onPress={() => handleOpenDeleteNotificationModal(notification)}
                         style={styles.deleteNotificationButton}
                       >
                         <DeleteIcon
@@ -745,6 +775,13 @@ export default function EditCity() {
           setEditingNotification(null);
         }}
         onSave={handleSaveNotification}
+      />
+
+      <DeleteNotificationModal
+        visible={Boolean(notificationPendingDelete)}
+        notificationTitle={notificationPendingDelete?.label}
+        onClose={handleCloseDeleteNotificationModal}
+        onConfirm={handleConfirmDeleteNotification}
       />
     </>
   );

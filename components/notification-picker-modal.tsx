@@ -35,6 +35,7 @@ export function NotificationPickerModal({
           <ImageBackground
             source={require('@/assets/images/bg--main-1.jpg')}
             style={styles.backgroundImage}
+            imageStyle={styles.backgroundImageAsset}
             resizeMode="cover"
           >
             <View style={styles.container}>
@@ -84,6 +85,9 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 27,
     borderBottomRightRadius: 27,
     overflow: 'hidden',
+  },
+  backgroundImageAsset: {
+    transform: [{ scale: 2 }],
   },
   container: {
     backgroundColor: 'rgba(62, 63, 86, 0.15)',
