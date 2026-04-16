@@ -2,6 +2,7 @@ import { useRef, useMemo, useImperativeHandle, forwardRef, useState, useEffect }
 import { View, ScrollView, Text, StyleSheet, Dimensions, NativeSyntheticEvent, NativeScrollEvent, Pressable, Animated } from 'react-native';
 
 import IconReset from '@/assets/images/icon--reset-1.svg';
+import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
 
@@ -26,19 +27,14 @@ type TimeRulerProps = {
   isActive?: boolean;
 };
 
-function getLocalTime(timeFormat: TimeFormat, offsetMinutes: number = 0): string {
+function getLocalTime(locale: string, timeFormat: TimeFormat, offsetMinutes: number = 0): string {
   const now = new Date();
   const shiftedTime = new Date(now.getTime() + offsetMinutes * 60 * 1000);
-  const hours24 = shiftedTime.getHours();
-  const minutes = shiftedTime.getMinutes();
-
-  if (timeFormat === '24h') {
-    return `${hours24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  }
-
-  const period = hours24 >= 12 ? 'PM' : 'AM';
-  const hour12 = hours24 % 12 || 12;
-  return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${period}`;
+  return new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: timeFormat === '12h',
+  }).format(shiftedTime);
 }
 
 function formatOffset(minutes: number): string {
@@ -66,6 +62,7 @@ const getScrollXForOffset = (minutes: number) => {
 
 export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeRuler({ offsetMinutes, onOffsetChange, timeFormat, isActive = true }, ref) {
   const { theme } = useAppTheme();
+  const { locale } = useI18n();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const scrollViewRef = useRef<ScrollView>(null);
   const isScrolling = useRef(false);
@@ -288,11 +285,11 @@ export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeR
             },
           ]}
         >
-          {getLocalTime(timeFormat, 0)}
+          {getLocalTime(locale, timeFormat, 0)}
         </Animated.Text>
         <Pressable onPress={handleResetPress}>
           <Text style={styles.localTimeText}>
-            {getLocalTime(timeFormat, displayOffset)}
+            {getLocalTime(locale, timeFormat, displayOffset)}
           </Text>
         </Pressable>
         <Animated.Text

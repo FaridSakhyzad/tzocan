@@ -20,6 +20,7 @@ import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-cont
 import { useSettings } from '@/contexts/settings-context';
 import type { CityNotification } from '@/contexts/selected-cities-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
+import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
 
@@ -379,16 +380,13 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
 
 export default function TimelineScreen() {
   const { theme } = useAppTheme();
+  const { locale, t } = useI18n();
   const { selectedCities, reorderCities } = useSelectedCities();
   const { timeFormat } = useSettings();
   const { isEditMode } = useEditMode();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [, setClockTick] = useState(0);
   const isFocused = useIsFocused();
-  const locale = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().locale || 'en-US',
-    []
-  );
 
   useEffect(() => {
     if (!isFocused) {
@@ -527,7 +525,7 @@ export default function TimelineScreen() {
     let timeZoneLabel;
 
     if (timezoneOffset === 0) {
-      timeZoneLabel = ', same';
+      timeZoneLabel = `, ${t('common.same')}`;
     } else if (timezoneOffset > 0) {
       timeZoneLabel = `, +${timezoneOffset}`
     } else {

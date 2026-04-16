@@ -6,6 +6,7 @@ import * as SQLite from "expo-sqlite";
 import IconCancelOutlined from '@/assets/images/icon--x-1--outlined.svg';
 import IconConfirmOutlined from '@/assets/images/icon--checkmark-1--outlined.svg';
 import { useDatabase } from '@/hooks/use-database';
+import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
 
@@ -42,6 +43,7 @@ type AddCityModalProps = {
 export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
+  const { t } = useI18n();
   const { db } = useDatabase();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [query, setQuery] = useState('');
@@ -134,7 +136,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                     />
                   </Pressable>
 
-                  <Text style={styles.title}>Add City</Text>
+                  <Text style={styles.title}>{t('common.addCity')}</Text>
 
                   <Pressable
                     style={[styles.confirmButton, !selectedCity && styles.confirmButtonDisabled]}
@@ -149,7 +151,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
 
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter City Name..."
+                  placeholder={t('addCity.searchPlaceholder')}
                   placeholderTextColor={theme.text.placeholder}
                   value={query}
                   onChangeText={setQuery}
@@ -158,7 +160,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                   autoFocus
                 />
 
-                {isLoading && <Text style={styles.loading}>Loading...</Text>}
+                {isLoading && <Text style={styles.loading}>{t('common.loading')}</Text>}
 
                 <ScrollView style={styles.resultsList} showsVerticalScrollIndicator={false}>
                   {cities.map((city) => (

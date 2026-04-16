@@ -18,6 +18,7 @@ import { useSettings, TimeFormat, FirstDayOfWeek } from '@/contexts/settings-con
 import { NotificationModal, NotificationFormValues } from '@/components/notification-modal';
 import { DeleteNotificationModal } from '@/components/delete-notification-modal';
 import { getCountryName } from '@/constants/country-names';
+import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
 
@@ -66,19 +67,13 @@ function NotificationToggleSwitch({
   );
 }
 
-function getNotificationRepeatLabel(notification: CityNotification, firstDayOfWeek: FirstDayOfWeek) {
+function getNotificationRepeatLabel(
+  notification: CityNotification,
+  firstDayOfWeek: FirstDayOfWeek,
+  weekdayShortLabels: Record<number, string>,
+  t: (key: string) => string
+) {
   const repeat = notification.repeat || (notification.isDaily ? 'daily' : 'none');
-
-  const weekdayLabel = (d: number) => {
-    if (d === 0) return 'Sun';
-    if (d === 1) return 'Mon';
-    if (d === 2) return 'Tue';
-    if (d === 3) return 'Wed';
-    if (d === 4) return 'Thu';
-    if (d === 5) return 'Fri';
-
-    return 'Sat';
-  };
 
   if (repeat === 'weekly') {
     const order = firstDayOfWeek === 'sunday'
@@ -88,27 +83,27 @@ function getNotificationRepeatLabel(notification: CityNotification, firstDayOfWe
     const days = (notification.weekdays || [])
       .slice()
       .sort((a, b) => (sortOrder.get(a) ?? 0) - (sortOrder.get(b) ?? 0))
-      .map(weekdayLabel);
+      .map((day) => weekdayShortLabels[day]);
 
-    return days.length > 0 ? `${days.join(', ')}` : 'Weekly';
+    return days.length > 0 ? `${days.join(', ')}` : t('common.weekly');
   }
 
   if (repeat === 'daily') {
-    return 'Daily';
+    return t('common.daily');
   }
 
   if (repeat === 'monthly') {
-    return 'Monthly';
+    return t('common.monthly');
   }
 
   if (repeat === 'yearly') {
-    return 'Yearly';
+    return t('common.yearly');
   }
 
   return null;
 }
 
-function getNotificationDateLabel(notification: CityNotification) {
+function getNotificationDateLabel(notification: CityNotification, locale: string) {
   const repeat = notification.repeat || (notification.isDaily ? 'daily' : 'none');
 
   if (notification.day && notification.month && notification.year) {
@@ -116,7 +111,7 @@ function getNotificationDateLabel(notification: CityNotification) {
     const currentYear = new Date().getFullYear();
     const includeYear = notification.year !== currentYear;
 
-    const parts = new Intl.DateTimeFormat('en-GB', {
+    const parts = new Intl.DateTimeFormat(locale, {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -158,7 +153,7 @@ function getDatePartsInTimezone(date: Date, timezone: string) {
   };
 }
 
-function getRelativeDayLabel(timezone: string) {
+function getRelativeDayLabel(timezone: string, t: (key: string) => string) {
   const now = new Date();
   const cityNow = getDatePartsInTimezone(now, timezone);
   const localStamp = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
@@ -166,11 +161,11 @@ function getRelativeDayLabel(timezone: string) {
   const dayDiff = Math.round((cityStamp - localStamp) / 86400000);
 
   if (dayDiff > 0) {
-    return 'Tomorrow';
+    return t('common.tomorrow');
   }
 
   if (dayDiff < 0) {
-    return 'Yesterday';
+    return t('common.yesterday');
   }
 
   return null;
@@ -211,16 +206,23 @@ function getTriggerDateForTimezone(
   return new Date(now.getTime() + diffMs);
 }
 
-function formatDateLabel(date: Date) {
-  const parts = new Intl.DateTimeFormat('en-GB', {
+function formatDateLabel(date: Date, locale: string) {
+  const currentYear = new Date().getFullYear();
+  const includeYear = date.getFullYear() !== currentYear;
+  const parts = new Intl.DateTimeFormat(locale, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
-    year: 'numeric',
+    ...(includeYear ? { year: 'numeric' } : {}),
   }).formatToParts(date);
   const getPart = (type: string) => parts.find((part) => part.type === type)?.value || '';
+  const baseLabel = `${getPart('weekday')} ${getPart('day')} ${getPart('month')}`;
 
-  return `${getPart('weekday')} ${getPart('day')} ${getPart('month')}, ${getPart('year')}`;
+  if (includeYear) {
+    return `${baseLabel}, ${getPart('year')}`;
+  }
+
+  return baseLabel;
 }
 
 function getNotificationTriggerDate(cityTz: string, notification: CityNotification) {
@@ -295,7 +297,7 @@ function getNotificationCityTriggerDateParts(cityTz: string, notification: CityN
   };
 }
 
-function getNotificationLocalDayShiftLabel(cityTz: string, notification: CityNotification) {
+function getNotificationLocalDayShiftLabel(cityTz: string, notification: CityNotification, t: (key: string) => string) {
   const cityTriggerDateParts = getNotificationCityTriggerDateParts(cityTz, notification);
   const triggerDate = getNotificationTriggerDate(cityTz, notification);
   const localStamp = Date.UTC(triggerDate.getFullYear(), triggerDate.getMonth(), triggerDate.getDate());
@@ -307,36 +309,36 @@ function getNotificationLocalDayShiftLabel(cityTz: string, notification: CityNot
   const dayDiff = Math.round((localStamp - cityStamp) / 86400000);
 
   if (dayDiff > 0) {
-    return 'Next Day';
+    return t('common.nextDay');
   }
 
   if (dayDiff < 0) {
-    return 'Previous Day';
+    return t('common.previousDay');
   }
 
   return null;
 }
 
-function getNotificationLocalMonthOrYearShiftLabel(cityTz: string, notification: CityNotification) {
+function getNotificationLocalMonthOrYearShiftLabel(cityTz: string, notification: CityNotification, t: (key: string) => string) {
   const cityTriggerDateParts = getNotificationCityTriggerDateParts(cityTz, notification);
   const triggerDate = getNotificationTriggerDate(cityTz, notification);
   const localYear = triggerDate.getFullYear();
   const localMonth = triggerDate.getMonth() + 1;
 
   if (localYear > cityTriggerDateParts.year) {
-    return 'Next Year';
+    return t('common.nextYear');
   }
 
   if (localYear < cityTriggerDateParts.year) {
-    return 'Previous Year';
+    return t('common.previousYear');
   }
 
   if (localMonth > cityTriggerDateParts.month) {
-    return 'Next Month';
+    return t('common.nextMonth');
   }
 
   if (localMonth < cityTriggerDateParts.month) {
-    return 'Previous Month';
+    return t('common.previousMonth');
   }
 
   return null;
@@ -356,12 +358,12 @@ function getNotificationLocalTime(
   }).format(triggerDate);
 }
 
-function getNotificationLocalDate(cityTz: string, notification: CityNotification) {
-  return formatDateLabel(getNotificationTriggerDate(cityTz, notification));
+function getNotificationLocalDate(cityTz: string, notification: CityNotification, locale: string) {
+  return formatDateLabel(getNotificationTriggerDate(cityTz, notification), locale);
 }
 
-function getCurrentTimeInTimezone(timezone: string, timeFormat: TimeFormat) {
-  return new Intl.DateTimeFormat(undefined, {
+function getCurrentTimeInTimezone(timezone: string, timeFormat: TimeFormat, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: timezone,
     hour: 'numeric',
     minute: '2-digit',
@@ -488,6 +490,7 @@ export default function EditCity() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { theme } = useAppTheme();
+  const { t, locale, weekdayShortLabels } = useI18n();
   const { cityId } = useLocalSearchParams<{ cityId: string }>();
   const { selectedCities, updateCityName, addNotification, updateNotification, removeNotification, toggleNotification } = useSelectedCities();
   const { timeFormat, firstDayOfWeek } = useSettings();
@@ -525,9 +528,9 @@ export default function EditCity() {
     return (
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.container}>
-          <Text style={styles.errorText}>City not found</Text>
+          <Text style={styles.errorText}>{t('editCity.notFound')}</Text>
           <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
+            <Text style={styles.backButtonText}>{t('common.goBack')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -598,16 +601,16 @@ export default function EditCity() {
     await toggleNotification(city.id, notificationId, !enabled);
   };
 
-  const relativeDayLabel = getRelativeDayLabel(city.tz);
+  const relativeDayLabel = getRelativeDayLabel(city.tz, t);
 
   return (
     <>
       <ScrollView style={styles.container}>
         <View style={styles.editCityHeader}>
           <Text style={styles.cityName}>{city.name}</Text>
-          <Text style={styles.cityCountry}>{getCountryName(city.country)}</Text>
+          <Text style={styles.cityCountry}>{getCountryName(city.country, locale)}</Text>
           <View style={styles.cityTimeInfo}>
-            <Text style={styles.cityTimezone}>{getCurrentTimeInTimezone(city.tz, timeFormat)}</Text>
+            <Text style={styles.cityTimezone}>{getCurrentTimeInTimezone(city.tz, timeFormat, locale)}</Text>
             <Text style={styles.cityTimezone}>{getUtcOffsetLabel(city.tz)}</Text>
             <Text style={styles.cityTimezone}>{getTimezoneOffsetLabel(city.tz)}</Text>
             {!!relativeDayLabel && (
@@ -618,7 +621,7 @@ export default function EditCity() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder={'Enter custom name...'}
+              placeholder={t('editCity.customNamePlaceholder')}
               placeholderTextColor={theme.text.placeholder}
               value={editName}
               onChangeText={handleNameChange}
@@ -637,10 +640,10 @@ export default function EditCity() {
           {city.notifications && city.notifications.length > 0 && (
             <View style={styles.notificationsList}>
               {city.notifications.map((notification, idx) => {
-                const notificationDateLabel = getNotificationDateLabel(notification);
-                const notificationRepeatLabel = getNotificationRepeatLabel(notification, firstDayOfWeek);
-                const notificationLocalDayShiftLabel = getNotificationLocalDayShiftLabel(city.tz, notification);
-                const notificationLocalMonthOrYearShiftLabel = getNotificationLocalMonthOrYearShiftLabel(city.tz, notification);
+                const notificationDateLabel = getNotificationDateLabel(notification, locale);
+                const notificationRepeatLabel = getNotificationRepeatLabel(notification, firstDayOfWeek, weekdayShortLabels, t);
+                const notificationLocalDayShiftLabel = getNotificationLocalDayShiftLabel(city.tz, notification, t);
+                const notificationLocalMonthOrYearShiftLabel = getNotificationLocalMonthOrYearShiftLabel(city.tz, notification, t);
 
                 return (
                   <View
@@ -655,7 +658,7 @@ export default function EditCity() {
                       {!!notification.label && notification.label.length > 0 ? (
                         <Text style={styles.notificationLabel}>{notification.label}</Text>
                       ) : (
-                        <Text style={styles.notificationLabelEmpty}>Notification</Text>
+                        <Text style={styles.notificationLabelEmpty}>{t('common.notification')}</Text>
                       )}
                       {!!notification.notes && (
                         <Text style={styles.notificationNotes}>{notification.notes}</Text>
@@ -679,7 +682,7 @@ export default function EditCity() {
 
                         <View style={styles.notificationLocalTime}>
                           <Text style={styles.notificationLocalTimeLabel}>
-                            Your Time:
+                            {t('common.yourTime')}
                           </Text>
                           <Text style={styles.notificationLocalTimeText}>
                             {getNotificationLocalTime(city.tz, notification, timeFormat)}
@@ -706,17 +709,17 @@ export default function EditCity() {
 
                           <View style={styles.notificationLocalDate}>
                             <Text style={styles.notificationLocalDateLabel}>
-                              Your Date:
+                              {t('common.yourDate')}
                             </Text>
 
                             <Text style={styles.notificationLocalDateText}>
-                              {getNotificationLocalDate(city.tz, notification)}
+                              {getNotificationLocalDate(city.tz, notification, locale)}
                             </Text>
 
                             {!!notificationLocalMonthOrYearShiftLabel && (
                               <Text style={[
                                 styles.notificationLocalDateShiftText,
-                                (notificationLocalMonthOrYearShiftLabel === 'Next Year' || notificationLocalMonthOrYearShiftLabel === 'Previous Year') && styles.notificationLocalDateShiftTextYear
+                                (notificationLocalMonthOrYearShiftLabel === t('common.nextYear') || notificationLocalMonthOrYearShiftLabel === t('common.previousYear')) && styles.notificationLocalDateShiftTextYear
                               ]}>
                                 {notificationLocalMonthOrYearShiftLabel}
                               </Text>

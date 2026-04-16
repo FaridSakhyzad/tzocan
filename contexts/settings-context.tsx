@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { detectPreferredLanguage, type LanguageCode } from '@/constants/i18n';
 import { DEFAULT_THEME_NAME, ThemeName } from '@/constants/ui-theme';
 
 export type TimeFormat = '12h' | '24h';
@@ -12,6 +13,8 @@ type SettingsContextType = {
   setFirstDayOfWeek: (value: FirstDayOfWeek) => void;
   timeOffsetMinutes: number;
   setTimeOffsetMinutes: (offset: number) => void;
+  languageCode: LanguageCode;
+  setLanguageCode: (languageCode: LanguageCode) => void;
   themeName: ThemeName;
   setThemeName: (themeName: ThemeName) => void;
   isLoaded: boolean;
@@ -25,6 +28,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [timeFormat, setTimeFormatState] = useState<TimeFormat>('12h');
   const [firstDayOfWeek, setFirstDayOfWeekState] = useState<FirstDayOfWeek>('monday');
   const [timeOffsetMinutes, setTimeOffsetMinutesState] = useState<number>(0);
+  const [languageCode, setLanguageCodeState] = useState<LanguageCode>(detectPreferredLanguage());
   const [themeName, setThemeNameState] = useState<ThemeName>(DEFAULT_THEME_NAME);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -40,6 +44,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (parsed.timeFormat) setTimeFormatState(parsed.timeFormat);
         if (parsed.firstDayOfWeek === 'monday' || parsed.firstDayOfWeek === 'sunday') setFirstDayOfWeekState(parsed.firstDayOfWeek);
         if (typeof parsed.timeOffsetMinutes === 'number') setTimeOffsetMinutesState(parsed.timeOffsetMinutes);
+        if (parsed.languageCode === 'en' || parsed.languageCode === 'ru' || parsed.languageCode === 'uk' || parsed.languageCode === 'fr') {
+          setLanguageCodeState(parsed.languageCode);
+        }
         if (parsed.themeName === 'dark' || parsed.themeName === 'light') {
           setThemeNameState(parsed.themeName);
         } else if (parsed.themeName === 'sea' || parsed.themeName === 'paper') {
@@ -57,6 +64,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     format: TimeFormat,
     firstDay: FirstDayOfWeek,
     offset: number,
+    nextLanguageCode: LanguageCode,
     nextThemeName: ThemeName
   ) => {
     try {
@@ -64,6 +72,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         timeFormat: format,
         firstDayOfWeek: firstDay,
         timeOffsetMinutes: offset,
+        languageCode: nextLanguageCode,
         themeName: nextThemeName,
       }));
     } catch (error) {
@@ -73,26 +82,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setTimeFormat = (format: TimeFormat) => {
     setTimeFormatState(format);
-    saveSettings(format, firstDayOfWeek, timeOffsetMinutes, themeName);
+    saveSettings(format, firstDayOfWeek, timeOffsetMinutes, languageCode, themeName);
   };
 
   const setFirstDayOfWeek = (value: FirstDayOfWeek) => {
     setFirstDayOfWeekState(value);
-    saveSettings(timeFormat, value, timeOffsetMinutes, themeName);
+    saveSettings(timeFormat, value, timeOffsetMinutes, languageCode, themeName);
   };
 
   const setTimeOffsetMinutes = (offset: number) => {
     setTimeOffsetMinutesState(offset);
-    saveSettings(timeFormat, firstDayOfWeek, offset, themeName);
+    saveSettings(timeFormat, firstDayOfWeek, offset, languageCode, themeName);
+  };
+
+  const setLanguageCode = (nextLanguageCode: LanguageCode) => {
+    setLanguageCodeState(nextLanguageCode);
+    saveSettings(timeFormat, firstDayOfWeek, timeOffsetMinutes, nextLanguageCode, themeName);
   };
 
   const setThemeName = (nextThemeName: ThemeName) => {
     setThemeNameState(nextThemeName);
-    saveSettings(timeFormat, firstDayOfWeek, timeOffsetMinutes, nextThemeName);
+    saveSettings(timeFormat, firstDayOfWeek, timeOffsetMinutes, languageCode, nextThemeName);
   };
 
   return (
-    <SettingsContext.Provider value={{ timeFormat, setTimeFormat, firstDayOfWeek, setFirstDayOfWeek, timeOffsetMinutes, setTimeOffsetMinutes, themeName, setThemeName, isLoaded }}>
+    <SettingsContext.Provider value={{ timeFormat, setTimeFormat, firstDayOfWeek, setFirstDayOfWeek, timeOffsetMinutes, setTimeOffsetMinutes, languageCode, setLanguageCode, themeName, setThemeName, isLoaded }}>
       {children}
     </SettingsContext.Provider>
   );

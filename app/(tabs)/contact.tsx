@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 
 import { DetailScreenShell, useDetailScreenStyles } from '@/components/detail-screen-shell';
 import { DetailPrimaryButton, DetailTextArea, DetailTextField, detailFormStyles } from '@/components/detail-form';
+import { useI18n } from '@/hooks/use-i18n';
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -10,6 +11,7 @@ function isValidEmail(value: string) {
 
 export default function ContactScreen() {
   const detailScreenStyles = useDetailScreenStyles();
+  const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [wasSubmitted, setWasSubmitted] = useState(false);
@@ -30,14 +32,14 @@ export default function ContactScreen() {
 
   return (
     <DetailScreenShell
-      title="Contact"
-      subtitle="Send feedback, report a bug, or share an idea for the app."
+      title={t('contact.title')}
+      subtitle={t('contact.subtitle')}
       keyboardShouldPersistTaps="handled"
     >
       <View>
         <View style={detailFormStyles.fieldBlock}>
           <DetailTextField
-            placeholder="Email..."
+            placeholder={t('contact.emailPlaceholder')}
             value={email}
             onChangeText={(value) => {
               setEmail(value);
@@ -51,7 +53,7 @@ export default function ContactScreen() {
 
         <View style={detailFormStyles.fieldBlock}>
           <DetailTextArea
-            placeholder="Message..."
+            placeholder={t('contact.messagePlaceholder')}
             value={message}
             onChangeText={(value) => {
               setMessage(value);
@@ -62,18 +64,18 @@ export default function ContactScreen() {
 
         {!canSend && (
           <Text style={detailScreenStyles.helperText}>
-            Enter a valid email and a message to enable sending.
+            {t('contact.validation')}
           </Text>
         )}
 
         {wasSubmitted && (
           <Text style={detailScreenStyles.successText}>
-            Message drafted. Hook up a backend later to send it for real.
+            {t('contact.submitted')}
           </Text>
         )}
 
         <DetailPrimaryButton
-          label="Send"
+          label={t('common.send')}
           onPress={handleSend}
           disabled={!canSend}
         />

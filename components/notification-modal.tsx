@@ -16,6 +16,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CityNotification } from '@/contexts/selected-cities-context';
 import { useSettings } from '@/contexts/settings-context';
+import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import IconCancelOutlined from '@/assets/images/icon--x-1--outlined.svg';
@@ -29,35 +30,6 @@ import IconArrow from '@/assets/images/icon--arrow-1.svg';
 import IconCheckmark from '@/assets/images/icon--checkmark-2.svg';
 
 import { NotificationPickerModal } from '@/components/notification-picker-modal';
-
-const DATE_SHIFT_LABELS = {
-  previousDay: 'Previous day',
-  nextDay: 'Next day',
-  previousMonth: 'Previous month',
-  nextMonth: 'Next month',
-  previousYear: 'Previous year',
-  nextYear: 'Next year',
-} as const;
-
-const REPEAT_LABELS = {
-  todayOnly: 'Never',
-  daily: 'Every day',
-  weekly: 'Every week',
-  monthly: 'Every month',
-  yearly: 'Every year',
-  chooseRepeat: 'Repeat...',
-  chooseSpecificWeekdays: 'Specific weekdays...',
-  weekdaysNotSelected: 'Not selected',
-  weekdays: {
-    0: 'Sun',
-    1: 'Mon',
-    2: 'Tue',
-    3: 'Wed',
-    4: 'Thu',
-    5: 'Fri',
-    6: 'Sat',
-  } as const,
-} as const;
 
 export type NotificationFormValues = {
   year?: number;
@@ -100,9 +72,29 @@ export function NotificationModal({
   onSave,
 }: NotificationModalProps) {
   const { theme } = useAppTheme();
-  const { firstDayOfWeek } = useSettings();
+  const { t, locale, weekdayShortLabels } = useI18n();
+  const { firstDayOfWeek, timeFormat } = useSettings();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const DATE_SHIFT_LABELS = useMemo(() => ({
+    previousDay: t('common.previousDay'),
+    nextDay: t('common.nextDay'),
+    previousMonth: t('common.previousMonth'),
+    nextMonth: t('common.nextMonth'),
+    previousYear: t('common.previousYear'),
+    nextYear: t('common.nextYear'),
+  }), [t]);
+  const REPEAT_LABELS = useMemo(() => ({
+    todayOnly: t('notification.repeat.never'),
+    daily: t('notification.repeat.daily'),
+    weekly: t('notification.repeat.weekly'),
+    monthly: t('notification.repeat.monthly'),
+    yearly: t('notification.repeat.yearly'),
+    chooseRepeat: t('notification.repeatPlaceholder'),
+    chooseSpecificWeekdays: t('notification.repeat.specificWeekdays'),
+    weekdaysNotSelected: t('notification.repeat.notSelected'),
+    weekdays: weekdayShortLabels,
+  }), [t, weekdayShortLabels]);
   const [notificationDate, setNotificationDate] = useState(new Date());
   const [notificationTime, setNotificationTime] = useState(() => {
     const date = new Date();
@@ -124,10 +116,10 @@ export function NotificationModal({
   const [pickerDraftWeekdays, setPickerDraftWeekdays] = useState<number[]>([]);
   const [pickerDraftCityId, setPickerDraftCityId] = useState<number | null>(null);
 
-  const formatDateLabel = (date: Date) => {
+  const formatDateLabel = useCallback((date: Date) => {
     const currentYear = new Date().getFullYear();
     const includeYear = date.getFullYear() !== currentYear;
-    const parts = new Intl.DateTimeFormat('en-GB', {
+    const parts = new Intl.DateTimeFormat(locale, {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -141,7 +133,7 @@ export function NotificationModal({
     }
 
     return baseLabel;
-  };
+  }, [locale]);
 
   const getTriggerDateForTimezone = (
     timezone: string,
@@ -233,12 +225,13 @@ export function NotificationModal({
       }
     }
 
-    const timeText = new Intl.DateTimeFormat(undefined, {
+    const timeText = new Intl.DateTimeFormat(locale, {
       timeStyle: 'short',
     }).format(triggerDate);
-    const localTimeText = new Intl.DateTimeFormat(undefined, {
+    const localTimeText = new Intl.DateTimeFormat(locale, {
       hour: 'numeric',
       minute: '2-digit',
+      hour12: timeFormat === '12h',
     }).format(triggerDate);
 
     const localYear = triggerDate.getFullYear();
@@ -269,7 +262,7 @@ export function NotificationModal({
       monthOrYearShiftText,
       dayShiftText,
     };
-  }, [hasDate, notificationDate]);
+  }, [DATE_SHIFT_LABELS, formatDateLabel, hasDate, locale, notificationDate, timeFormat]);
 
   useEffect(() => {
     if (!visible) {
@@ -412,23 +405,23 @@ export function NotificationModal({
 
   const pickerTitle = (() => {
     if (activePicker === 'city') {
-      return 'Choose City';
+      return t('notification.chooseCity');
     }
 
     if (activePicker === 'time') {
-      return 'Choose Time';
+      return t('notification.chooseTime');
     }
 
     if (activePicker === 'date') {
-      return 'Choose Date';
+      return t('notification.chooseDate');
     }
 
     if (activePicker === 'weekdays') {
-      return 'Choose Weekdays';
+      return t('notification.chooseWeekdays');
     }
 
     if (activePicker === 'repeat') {
-      return 'Choose Repeat';
+      return t('notification.chooseRepeat');
     }
 
     return null
@@ -436,14 +429,14 @@ export function NotificationModal({
 
   const modalTitle = (() => {
     if (mode === 'edit') {
-      return 'Edit Notification';
+      return t('notification.title.edit');
     }
 
     if (citySelectionMode === 'locked') {
-      return 'Add Notification';
+      return t('notification.title.add');
     }
 
-    return 'New Notification';
+    return t('notification.title.new');
   })();
 
   const localPreviewInfo = useMemo(() => {
@@ -613,7 +606,7 @@ export function NotificationModal({
                     {selectedCityOption?.label ? (
                       <Text style={[styles.actionButtonText, styles.citySelectText]}>{selectedCityOption?.label}</Text>
                     ) : (
-                      <Text style={[styles.actionButtonHintText, styles.actionButtonHintTextCity]}>Choose City...</Text>
+                      <Text style={[styles.actionButtonHintText, styles.actionButtonHintTextCity]}>{t('notification.cityPlaceholder')}</Text>
                     )}
                     <IconArrow style={styles.citySelectIcon} fill={theme.text.primary} />
                   </Pressable>
@@ -627,7 +620,7 @@ export function NotificationModal({
 
                 <TextInput
                   style={styles.labelInput}
-                  placeholder="Title..."
+                  placeholder={t('notification.labelPlaceholder')}
                   placeholderTextColor={theme.text.placeholder}
                   value={notificationLabel}
                   onChangeText={setNotificationLabel}
@@ -636,7 +629,7 @@ export function NotificationModal({
 
                 <TextInput
                   style={styles.notesInput}
-                  placeholder="Notes..."
+                  placeholder={t('notification.notesPlaceholder')}
                   placeholderTextColor={theme.text.placeholder}
                   value={notificationNotes}
                   onChangeText={setNotificationNotes}
@@ -645,7 +638,7 @@ export function NotificationModal({
 
                 <TextInput
                   style={styles.urlInput}
-                  placeholder="URL..."
+                  placeholder={t('notification.urlPlaceholder')}
                   placeholderTextColor={theme.text.placeholder}
                   value={notificationUrl}
                   onChangeText={setNotificationUrl}
@@ -666,7 +659,7 @@ export function NotificationModal({
                       </View>
                       {selectedCityOption && (
                         <View style={styles.localTimeBox}>
-                          <Text style={styles.localTimeLabel}>Your Time:</Text>
+                          <Text style={styles.localTimeLabel}>{t('common.yourTime')}</Text>
                           <Text style={styles.localTime}>{localPreviewInfo.localTimeText}</Text>
                           {!!localPreviewInfo.dayShiftText && (
                             <Text style={styles.localTimeDayShift}>{localPreviewInfo.dayShiftText}</Text>
@@ -677,7 +670,7 @@ export function NotificationModal({
                   ) : (
                     <View style={styles.actionButtonHint}>
                       <IconClock style={styles.actionButtonHintIcon} fill={theme.text.primary} />
-                      <Text style={styles.actionButtonHintText}>Time...</Text>
+                      <Text style={styles.actionButtonHintText}>{t('notification.timePlaceholder')}</Text>
                     </View>
                   )}
                 </Pressable>
@@ -702,7 +695,7 @@ export function NotificationModal({
 
                       {!!localPreviewInfo.localDateText && (
                         <View style={styles.localDateBox}>
-                          <Text style={styles.localDateLabel}>Your Date:</Text>
+                          <Text style={styles.localDateLabel}>{t('common.yourDate')}</Text>
                           <Text style={styles.localDate}>{localPreviewInfo.localDateText}</Text>
                           {!!localPreviewInfo.monthOrYearShiftText && (
                             <Text
@@ -722,7 +715,7 @@ export function NotificationModal({
                   ) : (
                     <View style={styles.actionButtonHint}>
                       <IconCalendar style={[styles.actionButtonHintIcon, styles.actionButtonHintIconCalendar]} fill={theme.text.primary} />
-                      <Text style={styles.actionButtonHintText}>Date...</Text>
+                      <Text style={styles.actionButtonHintText}>{t('notification.datePlaceholder')}</Text>
                     </View>
                   )}
                 </Pressable>
@@ -792,7 +785,7 @@ export function NotificationModal({
             <DateTimePicker
               value={pickerDraftTime}
               mode="time"
-              is24Hour={true}
+              is24Hour={timeFormat === '24h'}
               display="spinner"
               onChange={handleTimeChange}
               style={styles.timePicker}
@@ -800,7 +793,7 @@ export function NotificationModal({
             />
             {!!timePickerLocalPreviewInfo.timeText && (
               <View style={styles.timePickerLocalTimeBox}>
-                <Text style={styles.timePickerLocalTimeLabel}>Your Time:</Text>
+                <Text style={styles.timePickerLocalTimeLabel}>{t('common.yourTime')}</Text>
                 <Text style={styles.timePickerLocalTime}>
                   {timePickerLocalPreviewInfo.timeText}
                 </Text>
@@ -825,7 +818,7 @@ export function NotificationModal({
             />
             {!!datePickerPreviewInfo.localDateText && (
               <View style={styles.timePickerLocalTimeBox}>
-                <Text style={styles.timePickerLocalTimeLabel}>Your Date:</Text>
+                <Text style={styles.timePickerLocalTimeLabel}>{t('common.yourDate')}</Text>
                 <Text style={styles.timePickerLocalTime}>
                   {datePickerPreviewInfo.localDateText}
                 </Text>

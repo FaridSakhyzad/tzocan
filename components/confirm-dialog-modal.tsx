@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import { useI18n } from '@/hooks/use-i18n';
 
 type ConfirmDialogModalProps = {
   visible: boolean;
@@ -18,11 +19,14 @@ export function ConfirmDialogModal({
   title,
   onClose,
   onConfirm,
-  confirmLabel = 'Delete',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
 }: ConfirmDialogModalProps) {
   const { theme } = useAppTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const resolvedConfirmLabel = confirmLabel ?? t('common.delete');
+  const resolvedCancelLabel = cancelLabel ?? t('common.cancel');
 
   return (
     <Modal
@@ -46,10 +50,10 @@ export function ConfirmDialogModal({
 
             <View style={styles.actions}>
               <Pressable style={[styles.dialogButton, styles.dialogButtonDelete]} onPress={onConfirm}>
-                <Text style={[styles.dialogButtonText, styles.dialogButtonTextDelete]}>{confirmLabel}</Text>
+                <Text style={[styles.dialogButtonText, styles.dialogButtonTextDelete]}>{resolvedConfirmLabel}</Text>
               </Pressable>
               <Pressable style={[styles.dialogButton, styles.dialogButtonSecondary]} onPress={onClose}>
-                <Text style={[styles.dialogButtonText, styles.dialogButtonTextSecondary]}>{cancelLabel}</Text>
+                <Text style={[styles.dialogButtonText, styles.dialogButtonTextSecondary]}>{resolvedCancelLabel}</Text>
               </Pressable>
             </View>
           </View>

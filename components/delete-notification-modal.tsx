@@ -1,4 +1,5 @@
 import { ConfirmDialogModal } from '@/components/confirm-dialog-modal';
+import { useI18n } from '@/hooks/use-i18n';
 
 type DeleteNotificationModalProps = {
   visible: boolean;
@@ -13,9 +14,10 @@ export function DeleteNotificationModal({
   onClose,
   onConfirm,
 }: DeleteNotificationModalProps) {
+  const { t } = useI18n();
   const title = notificationTitle
-    ? `Delete notification\n"${notificationTitle}"?`
-    : 'Delete this notification?';
+    ? t('delete.notificationTitleNamed', { name: notificationTitle })
+    : t('delete.notificationTitleUnnamed');
 
   return (
     <ConfirmDialogModal

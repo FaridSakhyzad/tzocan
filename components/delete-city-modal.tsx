@@ -1,4 +1,5 @@
 import { ConfirmDialogModal } from '@/components/confirm-dialog-modal';
+import { useI18n } from '@/hooks/use-i18n';
 
 type DeleteCityModalProps = {
   visible: boolean;
@@ -8,7 +9,8 @@ type DeleteCityModalProps = {
 };
 
 export function DeleteCityModal({ visible, cityName, onClose, onConfirm }: DeleteCityModalProps) {
-  const title = `Delete "${cityName}"\nand all of its notifications?`;
+  const { t } = useI18n();
+  const title = t('delete.cityTitle', { name: cityName });
 
   return (
     <ConfirmDialogModal

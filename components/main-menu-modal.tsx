@@ -12,6 +12,7 @@ import { useMemo } from 'react';
 
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import { useI18n } from '@/hooks/use-i18n';
 
 import CloseButton from '../assets/images/icon--x-3--outlined.svg';
 
@@ -37,6 +38,7 @@ export function MainMenuModal({
   canAddNotification = true,
 }: MainMenuModalProps) {
   const { theme } = useAppTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const handleAddNotification = () => {
@@ -94,23 +96,23 @@ export function MainMenuModal({
                 onPress={handleAddNotification}
                 disabled={!canAddNotification}
               >
-                <Text style={styles.menuButtonText}>Add Notification</Text>
+                <Text style={styles.menuButtonText}>{t('common.addNotification')}</Text>
               </Pressable>
 
               <Pressable style={styles.menuButton} onPress={handleAddCity}>
-                <Text style={styles.menuButtonText}>Add City</Text>
+                <Text style={styles.menuButtonText}>{t('common.addCity')}</Text>
               </Pressable>
 
               <Pressable style={styles.menuButton} onPress={handleOpenSettings}>
-                <Text style={styles.menuButtonText}>Settings</Text>
+                <Text style={styles.menuButtonText}>{t('common.settings')}</Text>
               </Pressable>
 
               <Pressable style={styles.menuButton} onPress={handleOpenContact}>
-                <Text style={styles.menuButtonText}>Contact</Text>
+                <Text style={styles.menuButtonText}>{t('common.contact')}</Text>
               </Pressable>
 
               <Pressable style={styles.menuButton} onPress={handleOpenAbout}>
-                <Text style={styles.menuButtonText}>About</Text>
+                <Text style={styles.menuButtonText}>{t('common.about')}</Text>
               </Pressable>
             </View>
           </View>

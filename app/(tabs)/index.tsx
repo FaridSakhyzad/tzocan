@@ -15,6 +15,7 @@ import { useSettings, TimeFormat } from '@/contexts/settings-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { DeleteCityModal } from '@/components/delete-city-modal';
 import { TimeRuler } from '@/components/time-ruler';
+import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
 
@@ -24,10 +25,10 @@ import IconNotificationsMultiple from '@/assets/images/icon--notifications-multi
 
 const INDEX_CLOCK_REFRESH_INTERVAL_MS = 5000;
 
-function getLocalTime(timezone: string, timeFormat: TimeFormat, offsetMinutes: number = 0): string {
+function getLocalTime(timezone: string, locale: string, timeFormat: TimeFormat, offsetMinutes: number = 0): string {
   const now = new Date();
   const shiftedTime = new Date(now.getTime() + offsetMinutes * 60 * 1000);
-  return shiftedTime.toLocaleTimeString('en-US', {
+  return shiftedTime.toLocaleTimeString(locale, {
     timeZone: timezone,
     hour: '2-digit',
     minute: '2-digit',
@@ -35,7 +36,7 @@ function getLocalTime(timezone: string, timeFormat: TimeFormat, offsetMinutes: n
   });
 }
 
-function getTimezoneOffset(timezone: string): string {
+function getTimezoneOffset(timezone: string, sameLabel: string): string {
   const now = new Date();
 
   // Get time components in target timezone
@@ -83,14 +84,14 @@ function getTimezoneOffset(timezone: string): string {
   }
 
   if (diffMinutes === 0) {
-    return 'same';
+    return sameLabel;
   }
 
   const sign = diffMinutes > 0 ? '+' : '';
   const hours = diffMinutes / 60;
 
   if (Number.isInteger(hours)) {
-    return `${sign}${hours}hrs`;
+    return `${sign}${hours}h`;
   }
 
   const wholeHours = Math.floor(Math.abs(hours));
@@ -103,6 +104,7 @@ function getTimezoneOffset(timezone: string): string {
 export default function Index() {
   const router = useRouter();
   const { theme } = useAppTheme();
+  const { t, locale } = useI18n();
   const { selectedCities, reorderCities, removeCity } = useSelectedCities();
   const { timeFormat, timeOffsetMinutes, setTimeOffsetMinutes } = useSettings();
   const { isEditMode } = useEditMode();
@@ -224,7 +226,7 @@ export default function Index() {
 
               <View style={styles.cityMeta}>
                 <Text style={styles.cityTimezone}>
-                  {getTimezoneOffset(city.tz)}
+                  {getTimezoneOffset(city.tz, t('common.same'))}
                 </Text>
                 {city.notifications && city.notifications.length > 0 && (
                   <View style={styles.cityNotifications}>
@@ -247,7 +249,7 @@ export default function Index() {
               </View>
             </View>
             <Text style={styles.cityTime}>
-              {getLocalTime(city.tz, timeFormat, timeOffsetMinutes)}
+              {getLocalTime(city.tz, locale, timeFormat, timeOffsetMinutes)}
             </Text>
             <Animated.View
               pointerEvents={isEditMode ? 'auto' : 'none'}
@@ -275,8 +277,8 @@ export default function Index() {
       <View style={styles.mainView}>
         {selectedCities.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No cities added yet.</Text>
-            <Text style={styles.emptyStateHint}>Tap the + button to add a city.</Text>
+            <Text style={styles.emptyStateText}>{t('index.empty')}</Text>
+            <Text style={styles.emptyStateHint}>{t('index.emptyHint')}</Text>
           </View>
         ) : (
           <View style={styles.listContainer}>
@@ -306,7 +308,7 @@ export default function Index() {
 
         <DeleteCityModal
           visible={Boolean(cityPendingDelete)}
-          cityName={cityPendingDelete?.customName || cityPendingDelete?.name || 'this city'}
+          cityName={cityPendingDelete?.customName || cityPendingDelete?.name || t('city.fallbackName')}
           onClose={handleCloseDeleteCityModal}
           onConfirm={handleConfirmDeleteCity}
         />
