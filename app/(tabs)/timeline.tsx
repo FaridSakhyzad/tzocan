@@ -612,7 +612,7 @@ export default function TimelineScreen() {
           <View style={styles.resetButton}>
             <IconReset
               style={styles.resetButtonIcon}
-              fill={theme.text.onLight}
+              fill={theme.surface.button.subtleStrong}
             />
           </View>
         </Pressable>
