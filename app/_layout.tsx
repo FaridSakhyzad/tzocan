@@ -10,32 +10,13 @@ import 'react-native-reanimated';
 import { DatabaseProvider } from '@/hooks/use-database';
 import { SelectedCitiesProvider } from '@/contexts/selected-cities-context';
 import { SettingsProvider } from '@/contexts/settings-context';
+import { AppThemeProvider, useAppTheme } from '@/contexts/app-theme-context';
 import { EditModeProvider } from '@/contexts/edit-mode-context';
-import { Colors } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
   anchor: '(tabs)',
-};
-
-const AppTheme = {
-  dark: true,
-  colors: {
-    primary: Colors.light.tint,
-    background: 'transparent',
-    card: 'transparent',
-    text: Colors.light.text,
-    border: '#4a4b63',
-    notification: Colors.light.tint,
-  },
-  fonts: {
-    light: { fontFamily: 'Roboto', fontWeight: '300' as const },
-    regular: { fontFamily: 'Roboto', fontWeight: '400' as const },
-    medium: { fontFamily: 'Roboto', fontWeight: '500' as const },
-    bold: { fontFamily: 'Roboto', fontWeight: '700' as const },
-    heavy: { fontFamily: 'Roboto', fontWeight: '800' as const },
-  },
 };
 
 const setDefaultFont = () => {
@@ -67,6 +48,28 @@ const setDefaultFont = () => {
   };
 };
 
+function AppShell() {
+  const { theme, navigationTheme, statusBarStyle } = useAppTheme();
+
+  return (
+    <ImageBackground
+      source={theme.image.modalBackgroundSource}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <ThemeProvider value={navigationTheme}>
+        <Stack>
+          <Stack.Screen
+            name="(tabs)"
+            options={{ headerShown: false }}
+          />
+        </Stack>
+        <StatusBar style={statusBarStyle} />
+      </ThemeProvider>
+    </ImageBackground>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     'Roboto': require('@/assets/fonts/Roboto/Roboto-VariableFont_wdth,wght.ttf'),
@@ -85,29 +88,17 @@ export default function RootLayout() {
   }
 
   return (
-    <ImageBackground
-      source={require('@/assets/images/bg--main-1.jpg')}
-      style={styles.backgroundImage}
-      resizeMode="cover"
-    >
-      <DatabaseProvider>
-        <SettingsProvider>
+    <DatabaseProvider>
+      <SettingsProvider>
+        <AppThemeProvider>
           <SelectedCitiesProvider>
             <EditModeProvider>
-              <ThemeProvider value={AppTheme}>
-                <Stack>
-                  <Stack.Screen
-                    name="(tabs)"
-                    options={{ headerShown: false }}
-                  />
-                </Stack>
-                <StatusBar style="light" />
-              </ThemeProvider>
+              <AppShell />
             </EditModeProvider>
           </SelectedCitiesProvider>
-        </SettingsProvider>
-      </DatabaseProvider>
-    </ImageBackground>
+        </AppThemeProvider>
+      </SettingsProvider>
+    </DatabaseProvider>
   );
 }
 

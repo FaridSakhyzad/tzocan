@@ -6,8 +6,12 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  ImageBackground
+  ImageBackground,
 } from 'react-native';
+import { useMemo } from 'react';
+
+import type { UiTheme } from '@/constants/ui-theme.types';
+import { useAppTheme } from '@/contexts/app-theme-context';
 
 import CloseButton from '../assets/images/icon--x-3--outlined.svg';
 
@@ -32,6 +36,9 @@ export function MainMenuModal({
   onAbout,
   canAddNotification = true,
 }: MainMenuModalProps) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const handleAddNotification = () => {
     onClose();
     onAddNotification();
@@ -71,11 +78,11 @@ export function MainMenuModal({
       >
         <View style={styles.modalTop}>
           <Pressable onPress={onClose} style={styles.closeButton}>
-            <CloseButton fill="rgba(255, 255, 255, 1)" />
+            <CloseButton fill={theme.text.primary} />
           </Pressable>
         </View>
         <ImageBackground
-          source={require('@/assets/images/bg--main-1.jpg')}
+          source={theme.image.modalBackgroundSource}
           style={styles.backgroundImage}
           imageStyle={styles.backgroundImageAsset}
           resizeMode="cover"
@@ -114,61 +121,63 @@ export function MainMenuModal({
   );
 }
 
-const styles = StyleSheet.create({
-  mainMenuModal: {},
-  modalContainer: {
-    flex: 1,
-    flexDirection: 'column',
-    justifyContent: 'space-evenly',
-    backgroundColor: 'rgba(62, 63, 86, 0.9)',
-    padding: 40,
-  },
-  modalTop: {
-    flex: 1,
-  },
-  modalBottom: {
-    flex: 1,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    margin: 'auto'
-  },
-  backgroundImage: {
-    display: 'flex',
-    borderRadius: 20,
-    overflow: 'hidden'
-  },
-  backgroundImageAsset: {
-    transform: [{ scale: 2 }],
-  },
-  modalContent: {
-    backgroundColor: 'rgba(62, 63, 86, 0)',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 23,
-    gap: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  menuCard: {
-    flexDirection: 'column',
-    gap: 10,
-  },
-  menuButton: {
-    height: 40,
-    justifyContent: 'center',
-  },
-  menuButtonDisabled: {
-    opacity: 0.5,
-  },
-  menuButtonText: {
-    fontSize: 22,
-    color: '#fff',
-  },
-});
+function createStyles(theme: UiTheme) {
+  return StyleSheet.create({
+    mainMenuModal: {},
+    modalContainer: {
+      flex: 1,
+      flexDirection: 'column',
+      justifyContent: 'space-evenly',
+      backgroundColor: theme.overlay.strong,
+      padding: theme.spacing.modalX,
+    },
+    modalTop: {
+      flex: 1,
+    },
+    modalBottom: {
+      flex: 1,
+    },
+    closeButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      margin: 'auto',
+    },
+    backgroundImage: {
+      display: 'flex',
+      borderRadius: theme.radius.xl,
+      overflow: 'hidden',
+    },
+    backgroundImageAsset: {
+      transform: [{ scale: theme.image.modalBackgroundScale }],
+    },
+    modalContent: {
+      backgroundColor: theme.surface.transparent,
+      borderRadius: theme.radius.xl,
+      paddingVertical: theme.spacing.modalInnerY,
+      paddingHorizontal: theme.spacing.modalInnerX,
+      gap: theme.spacing.sectionGap,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    menuCard: {
+      flexDirection: 'column',
+      gap: 10,
+    },
+    menuButton: {
+      height: 40,
+      justifyContent: 'center',
+    },
+    menuButtonDisabled: {
+      opacity: 0.5,
+    },
+    menuButtonText: {
+      fontSize: theme.typography.titleLg.fontSize,
+      color: theme.text.primary,
+    },
+  });
+}

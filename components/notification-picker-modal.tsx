@@ -1,8 +1,10 @@
-import { ReactNode } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View, ImageBackground } from 'react-native';
 
 import IconCancelOutlined from '@/assets/images/icon--x-1--outlined.svg';
 import IconConfirmOutlined from '@/assets/images/icon--checkmark-1--outlined.svg';
+import type { UiTheme } from '@/constants/ui-theme.types';
+import { useAppTheme } from '@/contexts/app-theme-context';
 
 type NotificationPickerModalProps = {
   visible: boolean;
@@ -23,6 +25,9 @@ export function NotificationPickerModal({
   wide = false,
   children,
 }: NotificationPickerModalProps) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   return (
     <Modal
       visible={visible}
@@ -33,7 +38,7 @@ export function NotificationPickerModal({
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={[styles.card, wide && styles.cardWide]} onPress={() => undefined}>
           <ImageBackground
-            source={require('@/assets/images/bg--main-1.jpg')}
+            source={theme.image.modalBackgroundSource}
             style={styles.backgroundImage}
             imageStyle={styles.backgroundImageAsset}
             resizeMode="cover"
@@ -42,7 +47,7 @@ export function NotificationPickerModal({
               <View style={styles.header}>
                 {showActions && (
                   <Pressable style={styles.headerButton} onPress={onClose}>
-                    <IconCancelOutlined fill="white" />
+                    <IconCancelOutlined fill={theme.text.primary} />
                   </Pressable>
                 )}
 
@@ -50,7 +55,7 @@ export function NotificationPickerModal({
 
                 {showActions && (
                   <Pressable style={styles.headerButton} onPress={onApply}>
-                    <IconConfirmOutlined fill="white" />
+                    <IconConfirmOutlined fill={theme.text.primary} />
                   </Pressable>
                 )}
               </View>
@@ -64,48 +69,50 @@ export function NotificationPickerModal({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(62, 63, 86, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  card: {
-    backgroundColor: 'rgba(62, 63, 86, 0)',
-  },
-  cardWide: {
-    maxHeight: '90%',
-    width: '100%',
-    paddingHorizontal: 20,
-  },
-  backgroundImage: {
-    borderTopLeftRadius: 33,
-    borderTopRightRadius: 33,
-    borderBottomLeftRadius: 27,
-    borderBottomRightRadius: 27,
-    overflow: 'hidden',
-  },
-  backgroundImageAsset: {
-    transform: [{ scale: 2 }],
-  },
-  container: {
-    backgroundColor: 'rgba(62, 63, 86, 0.15)',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 20,
-    paddingHorizontal: 20
-  },
-  headerButton: {
-    width: 30,
-    height: 30,
-  },
-  title: {
-    color: '#fff',
-    fontSize: 16,
-    margin: 'auto'
-  },
-});
+function createStyles(theme: UiTheme) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: theme.overlay.strong,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    card: {
+      backgroundColor: theme.surface.transparent,
+    },
+    cardWide: {
+      maxHeight: '90%',
+      width: '100%',
+      paddingHorizontal: theme.spacing.screenX,
+    },
+    backgroundImage: {
+      borderTopLeftRadius: theme.radius.panelTop,
+      borderTopRightRadius: theme.radius.panelTop,
+      borderBottomLeftRadius: theme.radius.panelBottom,
+      borderBottomRightRadius: theme.radius.panelBottom,
+      overflow: 'hidden',
+    },
+    backgroundImageAsset: {
+      transform: [{ scale: theme.image.modalBackgroundScale }],
+    },
+    container: {
+      backgroundColor: theme.surface.elevatedSoft,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: theme.spacing.modalInnerY,
+      paddingHorizontal: theme.spacing.screenX,
+    },
+    headerButton: {
+      width: 30,
+      height: 30,
+    },
+    title: {
+      color: theme.text.primary,
+      fontSize: theme.typography.titleSm.fontSize,
+      margin: 'auto',
+    },
+  });
+}

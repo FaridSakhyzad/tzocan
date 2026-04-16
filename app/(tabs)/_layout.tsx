@@ -5,8 +5,7 @@ import { BottomTabBar, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View, Pressable } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import type { UiTheme } from '@/constants/ui-theme.types';
 
 import IconAddLocationOutlined from '@/assets/images/icon--add-location-1--outlined.svg';
 import IconAddLocationFilled from '@/assets/images/icon--add-location-1--filled.svg';
@@ -35,6 +34,7 @@ import { AddCityModal, type CityRow } from '@/components/add-city-modal';
 import { DeleteCityModal } from '@/components/delete-city-modal';
 import { NotificationModal, type NotificationFormValues } from '@/components/notification-modal';
 import { MainMenuModal } from '@/components/main-menu-modal';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { useSelectedCities } from '@/contexts/selected-cities-context';
 import IconDelete1 from '@/assets/images/icon--delete-2--outlined.svg';
@@ -44,8 +44,10 @@ function HeaderButtons() {
   const pathname = usePathname();
   const globalParams = useGlobalSearchParams<{ cityId?: string }>();
   const insets = useSafeAreaInsets();
+  const { theme } = useAppTheme();
   const { isEditMode, toggleEditMode } = useEditMode();
   const { selectedCities, addCity, addNotification, removeCity } = useSelectedCities();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const [isAddCityModalVisible, setIsAddCityModalVisible] = React.useState(false);
   const [isAddNotificationModalVisible, setIsAddNotificationModalVisible] = React.useState(false);
   const [selectedNotificationCityId, setSelectedNotificationCityId] = React.useState<number | null>(null);
@@ -227,7 +229,7 @@ function HeaderButtons() {
             >
               <IconBack
                 style={styles.headerButtonIcon}
-                fill="#fff"
+                fill={theme.text.primary}
               />
             </Pressable>
 
@@ -239,12 +241,12 @@ function HeaderButtons() {
               {isAddNotificationModalVisible ? (
                 <IconAddNotificationOutlined
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               ) : (
                 <IconAddNotificationFilled
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               )}
             </Pressable>
@@ -258,7 +260,7 @@ function HeaderButtons() {
             >
               <IconDelete1
                 style={styles.headerButtonIcon}
-                fill="rgba(255, 255, 204, 1)"
+                fill={theme.text.warning}
               />
             </Pressable>
           </>
@@ -274,7 +276,7 @@ function HeaderButtons() {
           >
             <IconBack
               style={styles.headerButtonIcon}
-              fill="#fff"
+              fill={theme.text.primary}
             />
           </Pressable>
         )}
@@ -291,12 +293,12 @@ function HeaderButtons() {
               {isEditMode ? (
                 <IconCheckmarkFilled
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               ) : (
                 <IconEditOutlined
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               )}
             </Pressable>
@@ -309,12 +311,12 @@ function HeaderButtons() {
               {isAddCityModalVisible ? (
                 <IconAddLocationFilled
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               ) : (
                 <IconAddLocationOutlined
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               )}
             </Pressable>
@@ -327,12 +329,12 @@ function HeaderButtons() {
               {isAddNotificationModalVisible ? (
                 <IconAddNotificationOutlined
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               ) : (
                 <IconAddNotificationFilled
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               )}
             </Pressable>
@@ -349,12 +351,12 @@ function HeaderButtons() {
               {isMainMenuModalVisible ? (
                 <IconMainMenuFilled
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               ) : (
                 <IconMainMenuOutlined
                   style={styles.headerButtonIcon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               )}
             </Pressable>
@@ -404,8 +406,9 @@ function HeaderButtons() {
 
 function CustomTabBar(props: BottomTabBarProps) {
   const pathname = usePathname();
-
+  const { theme } = useAppTheme();
   const { isEditMode } = useEditMode();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   const isCitiesListScreen = pathname === '/' || pathname === '/index';
 
@@ -423,14 +426,14 @@ function CustomTabBar(props: BottomTabBarProps) {
 
 export default function TabLayout() {
   const pathname = usePathname();
-
-  const colorScheme = useColorScheme();
+  const { theme } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: theme.navigation.colors.primary,
         headerShown: true,
         header: () => <HeaderButtons />,
         headerStyle: {
@@ -452,12 +455,12 @@ export default function TabLayout() {
               {(focused || pathname === '/edit-city') ? (
                 <IconClockFilled
                   style={styles.icon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               ) : (
                 <IconClockOutlined
                   style={styles.icon}
-                  fill="white"
+                  fill={theme.text.primary}
                 />
               )}
             </View>
@@ -472,9 +475,9 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconBox}>
               {focused ? (
-                <IconTimelineFilled style={styles.icon} fill="white" />
+                <IconTimelineFilled style={styles.icon} fill={theme.text.primary} />
               ) : (
-                <IconTimelineOutlined style={styles.icon} fill="white" />
+                <IconTimelineOutlined style={styles.icon} fill={theme.text.primary} />
               )}
             </View>
           ),
@@ -488,9 +491,9 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconBox}>
               {focused ? (
-                <IconNotificationFilled style={styles.icon} fill="white" />
+                <IconNotificationFilled style={styles.icon} fill={theme.text.primary} />
               ) : (
-                <IconNotificationOutlined style={styles.icon} fill="white" />
+                <IconNotificationOutlined style={styles.icon} fill={theme.text.primary} />
               )}
             </View>
           ),
@@ -528,75 +531,77 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  bottomBarContainer: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.4)',
-    paddingTop: 40,
-  },
-  bottomBarContainerCitiesList: {
-    paddingTop: 18,
-    borderTopWidth: 0,
-  },
-  tabBarStyle: {
-    backgroundColor: 'rgba(62, 63, 86, 0)',
-    borderTopColor: 'rgba(255, 255, 255, 0)',
-    paddingHorizontal: 16,
-  },
-  tabBarDisabled: {
-    opacity: 0.5,
-  },
-  headerButtonsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: 'rgba(62, 63, 86, 0)',
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.4)',
-    paddingHorizontal: 20
-  },
-  headerButton: {
-    width: 30,
-    height: 30,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 15,
-  },
-  headerButtonEditCitiesList: {
-    marginLeft: 0,
-    marginRight: 'auto'
-  },
-  headerButtonSettings: {
-    marginLeft: 'auto',
-    marginRight: 0
-  },
-  headerButtonDelete: {
-    marginLeft: 'auto',
-    marginRight: 0
-  },
-  headerButtonBack: {
-    marginLeft: 0,
-    marginRight: 'auto'
-  },
-  headerButtonDisabled: {
-    opacity: 0.5,
-  },
-  headerButtonIcon: {
-    width: 30,
-    height: 30,
-  },
-  headerButtonActive: {
-    borderColor: 'white',
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-  },
-  icon: {
-    width: 40,
-    height: 40
-  }
-});
+function createStyles(theme: UiTheme) {
+  return StyleSheet.create({
+    bottomBarContainer: {
+      borderTopWidth: 1,
+      borderTopColor: theme.border.faint,
+      paddingTop: 40,
+    },
+    bottomBarContainerCitiesList: {
+      paddingTop: 18,
+      borderTopWidth: 0,
+    },
+    tabBarStyle: {
+      backgroundColor: theme.surface.transparent,
+      borderTopColor: theme.border.transparent,
+      paddingHorizontal: 16,
+    },
+    tabBarDisabled: {
+      opacity: 0.5,
+    },
+    headerButtonsContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      backgroundColor: theme.surface.transparent,
+      paddingBottom: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border.faint,
+      paddingHorizontal: theme.spacing.screenX,
+    },
+    headerButton: {
+      width: 30,
+      height: 30,
+      borderWidth: 1,
+      borderColor: theme.border.transparent,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginHorizontal: 15,
+    },
+    headerButtonEditCitiesList: {
+      marginLeft: 0,
+      marginRight: 'auto'
+    },
+    headerButtonSettings: {
+      marginLeft: 'auto',
+      marginRight: 0
+    },
+    headerButtonDelete: {
+      marginLeft: 'auto',
+      marginRight: 0
+    },
+    headerButtonBack: {
+      marginLeft: 0,
+      marginRight: 'auto'
+    },
+    headerButtonDisabled: {
+      opacity: 0.5,
+    },
+    headerButtonIcon: {
+      width: 30,
+      height: 30,
+    },
+    headerButtonActive: {
+      borderColor: theme.border.field,
+    },
+    iconBox: {
+      width: 40,
+      height: 40,
+    },
+    icon: {
+      width: 40,
+      height: 40
+    }
+  });
+}

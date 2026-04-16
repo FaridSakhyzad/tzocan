@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEFAULT_THEME_NAME, ThemeName } from '@/constants/ui-theme';
 
 export type TimeFormat = '12h' | '24h';
 export type FirstDayOfWeek = 'monday' | 'sunday';
@@ -11,6 +12,8 @@ type SettingsContextType = {
   setFirstDayOfWeek: (value: FirstDayOfWeek) => void;
   timeOffsetMinutes: number;
   setTimeOffsetMinutes: (offset: number) => void;
+  themeName: ThemeName;
+  setThemeName: (themeName: ThemeName) => void;
   isLoaded: boolean;
 };
 
@@ -22,6 +25,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [timeFormat, setTimeFormatState] = useState<TimeFormat>('12h');
   const [firstDayOfWeek, setFirstDayOfWeekState] = useState<FirstDayOfWeek>('monday');
   const [timeOffsetMinutes, setTimeOffsetMinutesState] = useState<number>(0);
+  const [themeName, setThemeNameState] = useState<ThemeName>(DEFAULT_THEME_NAME);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -36,6 +40,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (parsed.timeFormat) setTimeFormatState(parsed.timeFormat);
         if (parsed.firstDayOfWeek === 'monday' || parsed.firstDayOfWeek === 'sunday') setFirstDayOfWeekState(parsed.firstDayOfWeek);
         if (typeof parsed.timeOffsetMinutes === 'number') setTimeOffsetMinutesState(parsed.timeOffsetMinutes);
+        if (parsed.themeName === 'dark' || parsed.themeName === 'light') {
+          setThemeNameState(parsed.themeName);
+        } else if (parsed.themeName === 'sea' || parsed.themeName === 'paper') {
+          setThemeNameState('light');
+        }
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -44,12 +53,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveSettings = async (format: TimeFormat, firstDay: FirstDayOfWeek, offset: number) => {
+  const saveSettings = async (
+    format: TimeFormat,
+    firstDay: FirstDayOfWeek,
+    offset: number,
+    nextThemeName: ThemeName
+  ) => {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
         timeFormat: format,
         firstDayOfWeek: firstDay,
         timeOffsetMinutes: offset,
+        themeName: nextThemeName,
       }));
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -58,21 +73,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setTimeFormat = (format: TimeFormat) => {
     setTimeFormatState(format);
-    saveSettings(format, firstDayOfWeek, timeOffsetMinutes);
+    saveSettings(format, firstDayOfWeek, timeOffsetMinutes, themeName);
   };
 
   const setFirstDayOfWeek = (value: FirstDayOfWeek) => {
     setFirstDayOfWeekState(value);
-    saveSettings(timeFormat, value, timeOffsetMinutes);
+    saveSettings(timeFormat, value, timeOffsetMinutes, themeName);
   };
 
   const setTimeOffsetMinutes = (offset: number) => {
     setTimeOffsetMinutesState(offset);
-    saveSettings(timeFormat, firstDayOfWeek, offset);
+    saveSettings(timeFormat, firstDayOfWeek, offset, themeName);
+  };
+
+  const setThemeName = (nextThemeName: ThemeName) => {
+    setThemeNameState(nextThemeName);
+    saveSettings(timeFormat, firstDayOfWeek, timeOffsetMinutes, nextThemeName);
   };
 
   return (
-    <SettingsContext.Provider value={{ timeFormat, setTimeFormat, firstDayOfWeek, setFirstDayOfWeek, timeOffsetMinutes, setTimeOffsetMinutes, isLoaded }}>
+    <SettingsContext.Provider value={{ timeFormat, setTimeFormat, firstDayOfWeek, setFirstDayOfWeek, timeOffsetMinutes, setTimeOffsetMinutes, themeName, setThemeName, isLoaded }}>
       {children}
     </SettingsContext.Provider>
   );

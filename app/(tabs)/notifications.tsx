@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -15,9 +15,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { NotificationModal, NotificationFormValues } from '@/components/notification-modal';
 import { DeleteNotificationModal } from '@/components/delete-notification-modal';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { CityNotification, useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
 import { useSettings, TimeFormat, FirstDayOfWeek } from '@/contexts/settings-context';
+import type { UiTheme } from '@/constants/ui-theme.types';
 
 import ClockIcon from '../../assets/images/icon--clock-2--outlined.svg';
 import CalendarIcon from '../../assets/images/icon--calendar-2--outlined.svg';
@@ -31,10 +33,13 @@ const NOTIFICATION_SWITCH_THUMB_TRAVEL = 16;
 function NotificationToggleSwitch({
   enabled,
   onPress,
+  theme,
 }: {
   enabled: boolean;
   onPress: () => void;
+  theme: UiTheme;
 }) {
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const thumbTranslateX = useState(() => new Animated.Value(enabled ? NOTIFICATION_SWITCH_THUMB_TRAVEL : 0))[0];
 
   useEffect(() => {
@@ -359,9 +364,11 @@ function formatScheduledTime(hour: number, minute: number, timeFormat: TimeForma
 export default function Notifications() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const { theme } = useAppTheme();
   const { selectedCities, reorderCities, removeCity, removeNotification, toggleNotification, updateNotification } = useSelectedCities();
   const { timeFormat, firstDayOfWeek } = useSettings();
   const { isEditMode } = useEditMode();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [, setClockTick] = useState(0);
 
   const [editingTarget, setEditingTarget] = useState<{
@@ -461,7 +468,7 @@ export default function Notifications() {
     setEditingTarget({ city, notification });
   };
 
-  const renderItem = useCallback(({ item: city, drag, isActive }: RenderItemParams<SelectedCity>) => {
+  const renderItem = ({ item: city, drag, isActive }: RenderItemParams<SelectedCity>) => {
     return (
       <ScaleDecorator>
         <View style={[styles.cityGroup, isActive && styles.cityGroupDragging]}>
@@ -522,10 +529,10 @@ export default function Notifications() {
                 <View style={styles.notificationDateTime}>
                   <View style={styles.notificationTime}>
                     <View style={styles.notificationCityTime}>
-                      <ClockIcon
-                        style={styles.notificationCityTimeIcon}
-                        fill={'rgba(255, 255, 255, 1)'}
-                      />
+                        <ClockIcon
+                          style={styles.notificationCityTimeIcon}
+                          fill={theme.text.primary}
+                        />
                       <Text style={styles.notificationCityTimeText}>
                         {formatScheduledTime(notification.hour, notification.minute, timeFormat)}
                       </Text>
@@ -552,7 +559,7 @@ export default function Notifications() {
                       <View style={styles.notificationCityDate}>
                         <CalendarIcon
                           style={styles.notificationCityDateIcon}
-                          fill={'rgba(255, 255, 255, 1)'}
+                          fill={theme.text.primary}
                         />
                         <Text style={styles.notificationCityDateText}>
                           {notificationDateLabel}
@@ -588,7 +595,7 @@ export default function Notifications() {
                     <View style={styles.notificationRepeat}>
                       <RepeatIcon
                         style={styles.notificationRepeatIcon}
-                        fill={'rgba(255, 255, 255, 1)'}
+                        fill={theme.text.primary}
                       />
                       <Text style={styles.notificationRepeatText}>{notificationRepeatLabel}</Text>
                     </View>
@@ -602,13 +609,14 @@ export default function Notifications() {
                   >
                     <EditIcon
                       style={styles.editNotificationIcon}
-                      fill={'rgba(255, 255, 255, 1)'}
+                      fill={theme.text.primary}
                     />
                   </Pressable>
 
                   <NotificationToggleSwitch
                     enabled={notification.enabled}
                     onPress={() => handleToggleNotification(city.id, notification.id, notification.enabled)}
+                    theme={theme}
                   />
 
                   <Pressable
@@ -617,7 +625,7 @@ export default function Notifications() {
                   >
                     <DeleteIcon
                       style={styles.deleteNotificationIcon}
-                      fill={'rgba(255, 255, 204, 1)'}
+                      fill={theme.text.warning}
                     />
                   </Pressable>
                 </View>
@@ -627,7 +635,7 @@ export default function Notifications() {
         </View>
       </ScaleDecorator>
     );
-  }, [isEditMode, timeFormat]);
+  };
 
   return (
     <GestureHandlerRootView style={styles.rootContainer}>
@@ -678,7 +686,8 @@ export default function Notifications() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: UiTheme) {
+  return StyleSheet.create({
   rootContainer: {
     flex: 1,
   },
@@ -687,7 +696,7 @@ const styles = StyleSheet.create({
   },
   listContent: {},
   helperText: {
-    color: '#9a9bb2',
+    color: theme.text.muted,
     fontSize: 12,
     marginTop: 6,
     marginLeft: 16,
@@ -699,19 +708,19 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 18,
-    color: '#9a9bb2',
+    color: theme.text.muted,
   },
   emptyStateHint: {
     fontSize: 14,
-    color: '#7a7b92',
+    color: theme.text.helper,
     marginTop: 8,
   },
   cityGroup: {
-    borderBottomColor: 'rgba(62, 63, 86, 0.5)',
+    borderBottomColor: theme.surface.button.subtleStrong,
     borderBottomWidth: 2,
   },
   cityGroupDragging: {
-    backgroundColor: 'rgba(62, 63, 86, 0.35)',
+    backgroundColor: theme.surface.cardStrong,
   },
   cityHeader: {
     flexDirection: 'row',
@@ -719,7 +728,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 17,
-    backgroundColor: 'rgba(62, 63, 86, 0.2)',
+    backgroundColor: theme.surface.cardSoft,
     marginBottom: 1,
   },
   dragHandle: {
@@ -728,33 +737,33 @@ const styles = StyleSheet.create({
   },
   dragHandleText: {
     fontSize: 18,
-    color: '#9a9bb2',
+    color: theme.text.muted,
   },
   cityName: {
     flex: 1,
     fontSize: 20,
     lineHeight: 26,
     fontWeight: 'bold',
-    color: '#fff',
+    color: theme.text.primary,
     paddingHorizontal: 2,
   },
   cityHeaderTime: {
     fontSize: 20,
     lineHeight: 26,
-    color: '#fff',
+    color: theme.text.primary,
     marginLeft: 12
   },
   deleteCityButton: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FF3B30',
+    backgroundColor: theme.surface.button.danger,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
   },
   deleteCityButtonText: {
-    color: 'white',
+    color: theme.text.primary,
     fontSize: 20,
     fontWeight: '600',
     lineHeight: 22,
@@ -763,10 +772,10 @@ const styles = StyleSheet.create({
     paddingTop: 17,
     paddingBottom: 22,
     paddingHorizontal: 20,
-    backgroundColor: 'rgba(62, 63, 86, 0.2)',
+    backgroundColor: theme.surface.cardSoft,
   },
   notificationItemEven: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: theme.surface.cardAlt,
   },
   notificationDetails: {
     flexDirection: 'column',
@@ -778,23 +787,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '600',
-    color: '#ffffff',
+    color: theme.text.primary,
   },
   notificationLabelEmpty: {
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '300',
-    color: '#ffffff',
+    color: theme.text.primary,
   },
   notificationNotes: {
     fontSize: 15,
     lineHeight: 18,
-    color: '#fff',
+    color: theme.text.primary,
   },
   notificationUrl: {
     fontSize: 15,
     lineHeight: 18,
-    color: '#ffffcc',
+    color: theme.text.warning,
     textDecorationLine: 'underline',
   },
   notificationDateTime: {
@@ -817,7 +826,7 @@ const styles = StyleSheet.create({
   },
   notificationCityTimeText: {
     fontSize: 15,
-    color: '#fff',
+    color: theme.text.primary,
   },
   notificationLocalTime: {
     flexDirection: 'row',
@@ -825,20 +834,20 @@ const styles = StyleSheet.create({
   },
   notificationLocalTimeLabel: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: theme.text.secondary,
   },
   notificationLocalTimeText: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   notificationLocalDayShiftText: {
     fontSize: 11,
     paddingHorizontal: 7,
     height: 14,
-    borderRadius: 7,
+    borderRadius: theme.radius.pillSm,
     lineHeight: 13,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    color: 'rgba(63, 68, 86, 0.9)',
+    backgroundColor: theme.surface.button.primary,
+    color: theme.text.onLight,
     marginBottom: -2,
     marginLeft: 7,
   },
@@ -858,7 +867,7 @@ const styles = StyleSheet.create({
   },
   notificationCityDateText: {
     fontSize: 15,
-    color: '#fff',
+    color: theme.text.primary,
   },
   notificationLocalDate: {
     flexDirection: 'row',
@@ -866,25 +875,25 @@ const styles = StyleSheet.create({
   },
   notificationLocalDateLabel: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: theme.text.secondary,
   },
   notificationLocalDateText: {
     fontSize: 13,
-    color: '#fff',
+    color: theme.text.primary,
   },
   notificationLocalDateShiftText: {
     fontSize: 11,
     paddingHorizontal: 7,
     height: 14,
-    borderRadius: 7,
+    borderRadius: theme.radius.pillSm,
     lineHeight: 13,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    color: 'rgba(63, 68, 86, 0.9)',
+    backgroundColor: theme.surface.button.primary,
+    color: theme.text.onLight,
     marginBottom: -2,
     marginLeft: 7,
   },
   notificationLocalDateShiftTextYear: {
-    backgroundColor: 'rgba(255, 255, 204, 1)',
+    backgroundColor: theme.text.warning,
   },
   notificationRepeat: {
     flexDirection: 'row',
@@ -897,7 +906,7 @@ const styles = StyleSheet.create({
   },
   notificationRepeatText: {
     fontSize: 15,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   notificationActions: {
     flexDirection: 'row',
@@ -909,7 +918,7 @@ const styles = StyleSheet.create({
   editNotificationButton: {
     width: 30,
     height: 24,
-    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    backgroundColor: theme.surface.button.subtle,
     borderRadius: 15,
   },
   editNotificationIcon: {
@@ -921,13 +930,13 @@ const styles = StyleSheet.create({
     width: 33,
     height: 17,
     borderRadius: 9,
-    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    backgroundColor: theme.surface.button.subtle,
     padding: 3,
   },
   toggleNotificationSwitchThumb: {
     width: 11,
     height: 11,
-    backgroundColor: '#fff',
+    backgroundColor: theme.surface.button.primary,
     borderRadius: 6,
     position: 'absolute',
     top: 3,
@@ -936,7 +945,7 @@ const styles = StyleSheet.create({
   deleteNotificationButton: {
     width: 30,
     height: 24,
-    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    backgroundColor: theme.surface.button.subtle,
     borderRadius: 15,
   },
   deleteNotificationIcon: {
@@ -944,4 +953,5 @@ const styles = StyleSheet.create({
     height: 12,
     margin: 'auto',
   },
-});
+  });
+}

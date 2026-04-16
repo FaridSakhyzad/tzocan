@@ -76,33 +76,32 @@ export const TimeRuler = forwardRef<TimeRulerRef, TimeRulerProps>(function TimeR
   const rightSlideAnim = useRef(new Animated.Value(offsetMinutes !== 0 ? 0 : 30)).current;
   const topSlideAnim = useRef(new Animated.Value(offsetMinutes !== 0 ? 0 : -20)).current;
   const opacityAnim = useRef(new Animated.Value(offsetMinutes !== 0 ? 1 : 0)).current;
+  const isOffsetVisible = displayOffset !== 0;
 
   useEffect(() => {
-    const isVisible = displayOffset !== 0;
-
     Animated.parallel([
       Animated.timing(leftSlideAnim, {
-        toValue: isVisible ? 0 : -30,
+        toValue: isOffsetVisible ? 0 : -30,
         duration: 200,
         useNativeDriver: true,
       }),
       Animated.timing(rightSlideAnim, {
-        toValue: isVisible ? 0 : 30,
+        toValue: isOffsetVisible ? 0 : 30,
         duration: 200,
         useNativeDriver: true,
       }),
       Animated.timing(topSlideAnim, {
-        toValue: isVisible ? 0 : -20,
+        toValue: isOffsetVisible ? 0 : -20,
         duration: 200,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
-        toValue: isVisible ? 1 : 0,
+        toValue: isOffsetVisible ? 1 : 0,
         duration: 200,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [displayOffset !== 0]);
+  }, [displayOffset, isOffsetVisible, leftSlideAnim, opacityAnim, rightSlideAnim, topSlideAnim]);
 
   useEffect(() => {
     if (isScrolling.current || isProgrammaticScroll.current) {

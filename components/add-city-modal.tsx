@@ -1,15 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Text, View, TextInput, StyleSheet, Pressable, Modal, KeyboardAvoidingView, Platform, ScrollView, ImageBackground } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SQLite from "expo-sqlite";
 
 import IconCancelOutlined from '@/assets/images/icon--x-1--outlined.svg';
-import IconCancelFilled from '@/assets/images/icon--x-1--filled.svg';
-
 import IconConfirmOutlined from '@/assets/images/icon--checkmark-1--outlined.svg';
-import IconConfirmFilled from '@/assets/images/icon--checkmark-1--filled.svg';
-
 import { useDatabase } from '@/hooks/use-database';
+import type { UiTheme } from '@/constants/ui-theme.types';
+import { useAppTheme } from '@/contexts/app-theme-context';
 
 export type CityRow = {
   id: number;
@@ -43,7 +41,9 @@ type AddCityModalProps = {
 
 export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
   const insets = useSafeAreaInsets();
+  const { theme } = useAppTheme();
   const { db } = useDatabase();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [query, setQuery] = useState('');
   const [cities, setCities] = useState<CityRow[]>([]);
   const [selectedCity, setSelectedCity] = useState<CityRow | null>(null);
@@ -108,7 +108,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
       onRequestClose={onClose}
     >
       <ImageBackground
-        source={require('@/assets/images/bg--main-1.jpg')}
+        source={theme.image.modalBackgroundSource}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -130,7 +130,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                 <View style={styles.header}>
                   <Pressable style={styles.cancelButton} onPress={onClose}>
                     <IconCancelOutlined
-                      fill="white"
+                      fill={theme.text.primary}
                     />
                   </Pressable>
 
@@ -142,7 +142,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                     disabled={!selectedCity}
                   >
                     <IconConfirmOutlined
-                      fill="white"
+                      fill={theme.text.primary}
                     />
                   </Pressable>
                 </View>
@@ -150,7 +150,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                 <TextInput
                   style={styles.input}
                   placeholder="Enter City Name..."
-                  placeholderTextColor='rgba(255, 255, 255, 0.5)'
+                  placeholderTextColor={theme.text.placeholder}
                   value={query}
                   onChangeText={setQuery}
                   autoCapitalize="none"
@@ -185,93 +185,95 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  backgroundImage: {
-    flex: 1,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(62, 63, 86, 0.4)',
-  },
-  safeArea: {
-    flex: 1,
-  },
-  modalBg: {
-    flex: 1,
-    backgroundColor: 'rgba(62, 63, 86, 0.4)',
-  },
-  modalContent: {
-    minHeight: '100%',
-    maxHeight: '100%',
-  },
-  header: {
-    paddingHorizontal: 33,
-    paddingTop: 20,
-    paddingBottom: 30,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  cancelButton: {
-    width: 30,
-    height: 30,
-  },
-  confirmButton: {
-    width: 30,
-    height: 30,
-  },
-  confirmButtonDisabled: {
-    opacity: 0.5
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 1)',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginLeft: 20,
-    marginRight: 20,
-    marginBottom: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    color: '#fff',
-  },
-  loading: {
-    color: '#9a9bb2',
-    marginBottom: 8,
-  },
-  resultsList: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  cityItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 13,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    marginBottom: 6,
-  },
-  cityItemPressed: {
-    backgroundColor: 'rgba(62, 63, 86, 0.9)',
-  },
-  cityItemSelected: {
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.35)',
-  },
-  cityText: {
-    fontSize: 16,
-    lineHeight: 16,
-    color: '#fff',
-    marginBottom: 1,
-  },
-  cityTimezone: {
-    fontSize: 13,
-    lineHeight: 13,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-});
+function createStyles(theme: UiTheme) {
+  return StyleSheet.create({
+    backgroundImage: {
+      flex: 1,
+    },
+    modalContainer: {
+      flex: 1,
+      backgroundColor: theme.overlay.medium,
+    },
+    safeArea: {
+      flex: 1,
+    },
+    modalBg: {
+      flex: 1,
+      backgroundColor: theme.overlay.medium,
+    },
+    modalContent: {
+      minHeight: '100%',
+      maxHeight: '100%',
+    },
+    header: {
+      paddingHorizontal: 33,
+      paddingTop: theme.spacing.modalInnerY,
+      paddingBottom: 30,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    title: {
+      fontSize: theme.typography.titleLg.fontSize,
+      fontWeight: '600',
+      color: theme.text.primary,
+    },
+    cancelButton: {
+      width: 30,
+      height: 30,
+    },
+    confirmButton: {
+      width: 30,
+      height: 30,
+    },
+    confirmButtonDisabled: {
+      opacity: 0.5
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.border.field,
+      borderRadius: theme.radius.md,
+      padding: 12,
+      fontSize: theme.typography.control.fontSize,
+      marginLeft: theme.spacing.screenX,
+      marginRight: theme.spacing.screenX,
+      marginBottom: 16,
+      backgroundColor: theme.surface.field,
+      color: theme.text.primary,
+    },
+    loading: {
+      color: theme.text.muted,
+      marginBottom: 8,
+    },
+    resultsList: {
+      flex: 1,
+      paddingHorizontal: theme.spacing.screenX,
+    },
+    cityItem: {
+      paddingVertical: 12,
+      paddingHorizontal: 13,
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.surface.fieldStrong,
+      marginBottom: 6,
+    },
+    cityItemPressed: {
+      backgroundColor: theme.overlay.strong,
+    },
+    cityItemSelected: {
+      backgroundColor: theme.surface.fieldSelected,
+      borderWidth: 1,
+      borderColor: theme.border.faint,
+    },
+    cityText: {
+      fontSize: theme.typography.control.fontSize,
+      lineHeight: 16,
+      color: theme.text.primary,
+      marginBottom: 1,
+    },
+    cityTimezone: {
+      fontSize: 13,
+      lineHeight: 13,
+      color: theme.text.secondary,
+    },
+  });
+}

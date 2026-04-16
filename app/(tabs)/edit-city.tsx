@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Animated,
   Easing,
@@ -18,6 +18,8 @@ import { useSettings, TimeFormat, FirstDayOfWeek } from '@/contexts/settings-con
 import { NotificationModal, NotificationFormValues } from '@/components/notification-modal';
 import { DeleteNotificationModal } from '@/components/delete-notification-modal';
 import { getCountryName } from '@/constants/country-names';
+import type { UiTheme } from '@/constants/ui-theme.types';
+import { useAppTheme } from '@/contexts/app-theme-context';
 
 import ClockIcon from '../../assets/images/icon--clock-2--outlined.svg';
 import CalendarIcon from '../../assets/images/icon--calendar-2--outlined.svg';
@@ -31,10 +33,13 @@ const NOTIFICATION_SWITCH_THUMB_TRAVEL = 16;
 function NotificationToggleSwitch({
   enabled,
   onPress,
+  theme,
 }: {
   enabled: boolean;
   onPress: () => void;
+  theme: UiTheme;
 }) {
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const thumbTranslateX = useState(() => new Animated.Value(enabled ? NOTIFICATION_SWITCH_THUMB_TRAVEL : 0))[0];
 
   useEffect(() => {
@@ -482,9 +487,11 @@ function getUtcOffsetLabel(timezone: string) {
 export default function EditCity() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const { theme } = useAppTheme();
   const { cityId } = useLocalSearchParams<{ cityId: string }>();
   const { selectedCities, updateCityName, addNotification, updateNotification, removeNotification, toggleNotification } = useSelectedCities();
   const { timeFormat, firstDayOfWeek } = useSettings();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [, setClockTick] = useState(0);
 
   const city = selectedCities.find(c => c.id === Number(cityId));
@@ -498,7 +505,7 @@ export default function EditCity() {
     if (city) {
       setEditName(city.customName || '');
     }
-  }, [city?.customName]);
+  }, [city]);
 
   useEffect(() => {
     if (!isFocused) {
@@ -612,7 +619,7 @@ export default function EditCity() {
             <TextInput
               style={styles.input}
               placeholder={'Enter custom name...'}
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              placeholderTextColor={theme.text.placeholder}
               value={editName}
               onChangeText={handleNameChange}
               autoCorrect={false}
@@ -663,7 +670,7 @@ export default function EditCity() {
                         <View style={styles.notificationCityTime}>
                           <ClockIcon
                             style={styles.notificationCityTimeIcon}
-                            fill={'rgba(255, 255, 255, 1)'}
+                            fill={theme.text.primary}
                           />
                           <Text style={styles.notificationCityTimeText}>
                             {notification.hour.toString().padStart(2, '0')}:{notification.minute.toString().padStart(2, '0')}
@@ -690,7 +697,7 @@ export default function EditCity() {
                           <View style={styles.notificationCityDate}>
                             <CalendarIcon
                               style={styles.notificationCityDateIcon}
-                              fill={'rgba(255, 255, 255, 1)'}
+                              fill={theme.text.primary}
                             />
                             <Text style={styles.notificationCityDateText}>
                               {notificationDateLabel}
@@ -722,7 +729,7 @@ export default function EditCity() {
                         <View style={styles.notificationRepeat}>
                           <RepeatIcon
                             style={styles.notificationRepeatIcon}
-                            fill={'rgba(255, 255, 255, 1)'}
+                            fill={theme.text.primary}
                           />
                           <Text style={styles.notificationRepeatText}>{notificationRepeatLabel}</Text>
                         </View>
@@ -736,13 +743,14 @@ export default function EditCity() {
                       >
                         <EditIcon
                           style={styles.editNotificationIcon}
-                          fill={'rgba(255, 255, 255, 1)'}
+                          fill={theme.text.primary}
                         />
                       </Pressable>
 
                       <NotificationToggleSwitch
                         enabled={notification.enabled}
                         onPress={() => handleToggleNotification(notification.id, notification.enabled)}
+                        theme={theme}
                       />
 
                       <Pressable
@@ -751,7 +759,7 @@ export default function EditCity() {
                       >
                         <DeleteIcon
                           style={styles.deleteNotificationIcon}
-                          fill={'rgba(255, 255, 204, 1)'}
+                          fill={theme.text.warning}
                         />
                       </Pressable>
                     </View>
@@ -787,43 +795,44 @@ export default function EditCity() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: UiTheme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
   errorText: {
     fontSize: 18,
-    color: '#9a9bb2',
+    color: theme.text.muted,
     textAlign: 'center',
     marginBottom: 16,
   },
   backButton: {
-    backgroundColor: '#5a5b73',
+    backgroundColor: theme.surface.button.subtleStrong,
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: theme.radius.md,
     alignItems: 'center',
   },
   backButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: theme.text.primary,
+    fontSize: theme.typography.control.fontSize,
     fontWeight: '600',
   },
   editCityHeader: {
     paddingTop: 16,
     paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.screenX,
   },
   cityName: {
     fontSize: 20,
     lineHeight: 30,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: theme.text.primary,
     marginBottom: 6,
     paddingHorizontal: 2,
   },
   cityCountry: {
     fontSize: 13,
-    color: '#ffffff',
+    color: theme.text.primary,
     marginBottom: 12,
     paddingHorizontal: 2,
   },
@@ -835,16 +844,16 @@ const styles = StyleSheet.create({
   },
   cityTimezone: {
     fontSize: 15,
-    color: '#ffffff',
+    color: theme.text.primary,
     fontWeight: 'bold',
   },
   cityRelativeDayLabel: {
-    backgroundColor: '#fff',
-    borderRadius: 9,
+    backgroundColor: theme.surface.button.primary,
+    borderRadius: theme.radius.pillMd,
     height: 18,
     lineHeight: 18,
     fontSize: 11,
-    color: 'rgba(62, 63, 86, 0.9)',
+    color: theme.text.onLight,
     paddingHorizontal: 9,
   },
   inputContainer: {
@@ -856,11 +865,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     height: 40,
     fontSize: 15,
-    color: '#ffffff',
+    color: theme.text.primary,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: theme.border.field,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.surface.fieldStrong,
     position: 'relative',
     zIndex: 1,
   },
@@ -871,19 +880,19 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(62, 63, 86, 0.3)',
+    backgroundColor: theme.surface.elevated,
     position: 'absolute',
     zIndex: 10,
     top: 8,
     right: 8,
   },
   clearButtonText: {
-    color: '#fff',
+    color: theme.text.primary,
     fontSize: 16,
   },
   hint: {
     fontSize: 12,
-    color: '#7a7b92',
+    color: theme.text.helper,
     marginTop: 8,
     marginBottom: 24,
   },
@@ -891,21 +900,21 @@ const styles = StyleSheet.create({
   notificationsSectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: theme.text.primary,
     marginBottom: 4,
   },
   notificationsList: {},
   notificationItem: {
     paddingTop: 17,
     paddingBottom: 22,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(62, 63, 86, 0.2)',
+    paddingHorizontal: theme.spacing.screenX,
+    backgroundColor: theme.surface.cardSoft,
   },
   notificationItemEven: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: theme.surface.cardAlt,
   },
   notificationItemDisabled: {
-    opacity: 0.5
+    opacity: 0.5,
   },
   notificationDetails: {
     flexDirection: 'column',
@@ -917,23 +926,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '600',
-    color: '#ffffff',
+    color: theme.text.primary,
   },
   notificationLabelEmpty: {
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '300',
-    color: '#ffffff',
+    color: theme.text.primary,
   },
   notificationNotes: {
     fontSize: 15,
     lineHeight: 18,
-    color: '#fff',
+    color: theme.text.primary,
   },
   notificationUrl: {
     fontSize: 15,
     lineHeight: 18,
-    color: '#ffffcc',
+    color: theme.text.warning,
   },
   notificationDateTime: {
     flexDirection: 'column',
@@ -955,7 +964,7 @@ const styles = StyleSheet.create({
   },
   notificationCityTimeText: {
     fontSize: 15,
-    color: '#fff',
+    color: theme.text.primary,
   },
   notificationLocalTime: {
     flexDirection: 'row',
@@ -963,20 +972,20 @@ const styles = StyleSheet.create({
   },
   notificationLocalTimeLabel: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: theme.text.secondary,
   },
   notificationLocalTimeText: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   notificationLocalDayShiftText: {
     fontSize: 11,
     paddingHorizontal: 7,
     height: 14,
-    borderRadius: 7,
+    borderRadius: theme.radius.pillSm,
     lineHeight: 13,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    color: 'rgba(63, 68, 86, 0.9)',
+    backgroundColor: theme.surface.button.primary,
+    color: theme.text.onLight,
     marginBottom: -2,
     marginLeft: 7,
   },
@@ -996,7 +1005,7 @@ const styles = StyleSheet.create({
   },
   notificationCityDateText: {
     fontSize: 15,
-    color: '#fff',
+    color: theme.text.primary,
   },
   notificationLocalDate: {
     flexDirection: 'row',
@@ -1004,25 +1013,25 @@ const styles = StyleSheet.create({
   },
   notificationLocalDateLabel: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: theme.text.secondary,
   },
   notificationLocalDateText: {
     fontSize: 13,
-    color: '#fff',
+    color: theme.text.primary,
   },
   notificationLocalDateShiftText: {
     fontSize: 11,
     paddingHorizontal: 7,
     height: 14,
-    borderRadius: 7,
+    borderRadius: theme.radius.pillSm,
     lineHeight: 13,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    color: 'rgba(63, 68, 86, 0.9)',
+    backgroundColor: theme.surface.button.primary,
+    color: theme.text.onLight,
     marginBottom: -2,
     marginLeft: 7,
   },
   notificationLocalDateShiftTextYear: {
-    backgroundColor: 'rgba(255, 255, 204, 1)',
+    backgroundColor: theme.text.warning,
   },
   notificationRepeat: {
     flexDirection: 'row',
@@ -1035,7 +1044,7 @@ const styles = StyleSheet.create({
   },
   notificationRepeatText: {
     fontSize: 15,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   notificationActions: {
     flexDirection: 'row',
@@ -1047,7 +1056,7 @@ const styles = StyleSheet.create({
   editNotificationButton: {
     width: 30,
     height: 24,
-    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    backgroundColor: theme.surface.button.subtle,
     borderRadius: 15,
   },
   editNotificationIcon: {
@@ -1059,13 +1068,13 @@ const styles = StyleSheet.create({
     width: 33,
     height: 17,
     borderRadius: 9,
-    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    backgroundColor: theme.surface.button.subtle,
     padding: 3,
   },
   toggleNotificationSwitchThumb: {
     width: 11,
     height: 11,
-    backgroundColor: '#fff',
+    backgroundColor: theme.surface.button.primary,
     borderRadius: 6,
     position: 'absolute',
     top: 3,
@@ -1074,7 +1083,7 @@ const styles = StyleSheet.create({
   deleteNotificationButton: {
     width: 30,
     height: 24,
-    backgroundColor: 'rgba(63, 68, 86, 0.4)',
+    backgroundColor: theme.surface.button.subtle,
     borderRadius: 15,
   },
   deleteNotificationIcon: {
@@ -1082,4 +1091,5 @@ const styles = StyleSheet.create({
     height: 12,
     margin: 'auto',
   },
-});
+  });
+}

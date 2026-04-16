@@ -20,6 +20,8 @@ import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-cont
 import { useSettings } from '@/contexts/settings-context';
 import type { CityNotification } from '@/contexts/selected-cities-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
+import type { UiTheme } from '@/constants/ui-theme.types';
+import { useAppTheme } from '@/contexts/app-theme-context';
 
 import IconNotification from '@/assets/images/icon--notification-2.svg';
 import IconReset from '@/assets/images/icon--reset-1.svg';
@@ -215,16 +217,9 @@ interface ITimeLineProps {
 }
 
 function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift, rowOffsetHours, totalHours, dayStartIndex, timelineWidth, hourlyCounts, timeFormat, width, locale }: ITimeLineProps) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const startX = useSharedValue(0);
-
-  const snapToCellCenter = (xNow: number) => {
-    "worklet";
-    const i = Math.round((xNow + width / 2 - sidePad - CELL_W / 2) / CELL_W);
-    const clampedI = Math.max(0, Math.min(totalHours - 1, i));
-
-    const target = sidePad + (clampedI + 0.5) * CELL_W - width / 2;
-    return clamp(target, minX, maxX);
-  };
 
   const applyRubber = (distance: number) => {
     "worklet";
@@ -232,6 +227,15 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
   };
 
   const pan = useMemo(() => {
+    const snapToCellCenter = (xNow: number) => {
+      "worklet";
+      const i = Math.round((xNow + width / 2 - sidePad - CELL_W / 2) / CELL_W);
+      const clampedI = Math.max(0, Math.min(totalHours - 1, i));
+
+      const target = sidePad + (clampedI + 0.5) * CELL_W - width / 2;
+      return clamp(target, minX, maxX);
+    };
+
     return Gesture.Pan()
       .enabled(enabled)
       // активируемся только при заметном горизонтальном движении
@@ -281,7 +285,7 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
           }
         );
       });
-  }, [enabled, maxX, minX, onEdgeDayShift, sidePad, totalHours, width]);
+  }, [enabled, maxX, minX, onEdgeDayShift, sidePad, startX, totalHours, width, x]);
 
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: -x.value - rowOffsetHours * CELL_W }],
@@ -356,7 +360,7 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
                     <View style={styles.notificationCountBadge}>
                       <IconNotification
                         style={styles.notificationCountIcon}
-                        fill='rgba(62, 63, 86, 0.5)'
+                        fill={theme.surface.button.subtleWeak}
                       />
                       {count > 1 && (<Text style={styles.notificationCountText}>{count}</Text>)}
                     </View>
@@ -374,9 +378,11 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
 }
 
 export default function TimelineScreen() {
+  const { theme } = useAppTheme();
   const { selectedCities, reorderCities } = useSelectedCities();
   const { timeFormat } = useSettings();
   const { isEditMode } = useEditMode();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [, setClockTick] = useState(0);
   const isFocused = useIsFocused();
   const locale = useMemo(
@@ -457,13 +463,13 @@ export default function TimelineScreen() {
     useCallback(() => {
       const target = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
       x.value = withTiming(clamp(target, minScrollX, maxScrollX), { duration: 220 });
-    }, [leftPadHours, maxScrollX, minScrollX, sidePad, width])
+    }, [leftPadHours, maxScrollX, minScrollX, sidePad, width, x])
   );
 
   const resetToLocalHour = useCallback(() => {
     const target = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
     x.value = withSpring(clamp(target, minScrollX, maxScrollX), { duration: 220 });
-  }, [leftPadHours, maxScrollX, minScrollX, sidePad, width]);
+  }, [leftPadHours, maxScrollX, minScrollX, sidePad, width, x]);
 
   const selectedYmd = useMemo(() => ({
     year: selectedDay.getFullYear(),
@@ -496,7 +502,7 @@ export default function TimelineScreen() {
         dayTransitionOpacity.value = withTiming(1, { duration: 200 });
       }
     });
-  }, [selectedDay]);
+  }, [dayTransitionOpacity, selectedDay]);
 
   const dayTransitionStyle = useAnimatedStyle(() => ({
     opacity: dayTransitionOpacity.value,
@@ -606,7 +612,7 @@ export default function TimelineScreen() {
           <View style={styles.resetButton}>
             <IconReset
               style={styles.resetButtonIcon}
-              fill='rgba(62, 63, 86, 0.6)'
+              fill={theme.text.onLight}
             />
           </View>
         </Pressable>
@@ -616,7 +622,7 @@ export default function TimelineScreen() {
           <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(-1)}>
             <Arrow1
               style={[styles.daySelectorButtonIcon, styles.daySelectorButtonIconRight]}
-              fill='rgba(255, 255, 255, 1)'
+              fill={theme.text.primary}
             />
           </Pressable>
           <Pressable style={styles.daySelectorCenter} onPress={resetSelectedDayToToday}>
@@ -632,7 +638,7 @@ export default function TimelineScreen() {
           <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(1)}>
             <Arrow1
               style={[styles.daySelectorButtonIcon]}
-              fill='rgba(255, 255, 255, 1)'
+              fill={theme.text.primary}
             />
           </Pressable>
         </View>
@@ -643,7 +649,8 @@ export default function TimelineScreen() {
 
 const DAY_SELECTOR_HEIGHT = 60;
 
-const styles = StyleSheet.create({
+function createStyles(theme: UiTheme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -662,7 +669,7 @@ const styles = StyleSheet.create({
     left: 0,
     width: CELL_W,
     height: 3000,
-    backgroundColor: 'rgba(62, 63, 86, 0.15)',
+    backgroundColor: theme.surface.elevatedSoft,
   },
   timelineViewport: {
     overflow: 'hidden',
@@ -672,7 +679,7 @@ const styles = StyleSheet.create({
     paddingTop: 11,
   },
   listItemDragging: {
-    backgroundColor: 'rgba(62, 63, 86, 0.16)',
+    backgroundColor: theme.surface.elevatedSoft,
   },
   listItemHeader: {
     paddingHorizontal: 22,
@@ -687,7 +694,7 @@ const styles = StyleSheet.create({
   dragHandleText: {
     fontSize: 20,
     lineHeight: 20,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: theme.text.secondary,
   },
   listItemTitle: {
     flex: 1,
@@ -696,18 +703,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 18,
     fontWeight: 'bold',
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   listItemTitleTimeOffset: {
     fontSize: 16,
     lineHeight: 18,
     flex: 1,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   listItemCurrentTime: {
     fontSize: 16,
     lineHeight: 18,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
     textAlign: 'right',
   },
   hourBox: {
@@ -719,11 +726,11 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     paddingTop: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.surface.fieldStrong,
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: theme.text.helper,
   },
   hourBlock12hFormat: {
     paddingTop: 8,
@@ -733,20 +740,20 @@ const styles = StyleSheet.create({
     fontSize: 36,
     lineHeight: 36,
     fontWeight: '300',
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   hourBlockDate: {
     fontSize: 18,
     lineHeight: 20,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
     marginTop: 16,
   },
   hourBlockAmPM: {
     fontSize: 14,
     lineHeight: 14,
-    color: 'rgba(255, 255, 255, 1)',
-    top: -3
+    color: theme.text.primary,
+    top: -3,
   },
   hourBlockYesterday: {
     opacity: 0.3,
@@ -757,11 +764,11 @@ const styles = StyleSheet.create({
   hourBlockAfterLimit: {},
   hourBlockOutsideFilled: {
     borderWidth: 1,
-    borderColor: 'black',
-    backgroundColor: '#ffffff',
+    borderColor: theme.text.onLight,
+    backgroundColor: theme.surface.button.primary,
   },
   hourBlockTextOutsideFilled: {
-    color: '#000000',
+    color: theme.text.onLight,
   },
   notificationCountBadge: {
     position: 'absolute',
@@ -775,7 +782,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: theme.surface.button.primary,
   },
   notificationCountIcon: {
     width: 9,
@@ -784,7 +791,7 @@ const styles = StyleSheet.create({
   notificationCountText: {
     fontSize: 12,
     lineHeight: 13,
-    color: 'rgba(62, 63, 86, 0.6)',
+    color: theme.text.onLight,
   },
   resetBar: {
     position: 'relative',
@@ -801,10 +808,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   resetButton: {
-    borderRadius: 10,
+    borderRadius: theme.radius.lg,
     width: 20,
     height: 20,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: theme.surface.button.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -815,7 +822,7 @@ const styles = StyleSheet.create({
   daySelectorBar: {
     height: 60,
     borderTopWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: theme.border.muted,
     paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -832,7 +839,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(62, 63, 86, 0.4)',
+    backgroundColor: theme.surface.button.subtle,
   },
   daySelectorButtonIcon: {
     width: 7,
@@ -847,11 +854,12 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   daySelectorWeekdayText: {
-    color: 'rgba(255, 255, 255, 1)',
-    fontSize: 14
+    color: theme.text.primary,
+    fontSize: 14,
   },
   daySelectorDateText: {
-    color: 'rgba(255, 255, 255, 1)',
-    fontSize: 18
+    color: theme.text.primary,
+    fontSize: 18,
   },
-})
+  });
+}

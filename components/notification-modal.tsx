@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   View,
@@ -16,6 +16,8 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CityNotification } from '@/contexts/selected-cities-context';
 import { useSettings } from '@/contexts/settings-context';
+import type { UiTheme } from '@/constants/ui-theme.types';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import IconCancelOutlined from '@/assets/images/icon--x-1--outlined.svg';
 import IconConfirmOutlined from '@/assets/images/icon--checkmark-1--outlined.svg';
 
@@ -76,7 +78,7 @@ type NotificationModalProps = {
   cityTimezone?: string;
   mode: 'add' | 'edit';
   citySelectionMode?: 'selectable' | 'locked';
-  cityOptions?: Array<{ id: number; label: string; hint?: string; timezone: string }>;
+  cityOptions?: { id: number; label: string; hint?: string; timezone: string }[];
   selectedCityId?: number | null;
   onSelectCityId?: (cityId: number) => void;
   initialNotification?: CityNotification | null;
@@ -97,8 +99,10 @@ export function NotificationModal({
   onClose,
   onSave,
 }: NotificationModalProps) {
+  const { theme } = useAppTheme();
   const { firstDayOfWeek } = useSettings();
   const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [notificationDate, setNotificationDate] = useState(new Date());
   const [notificationTime, setNotificationTime] = useState(() => {
     const date = new Date();
@@ -199,7 +203,7 @@ export function NotificationModal({
       day: getPart('day'),
     };
   };
-  const getPreviewInfo = (timezone: string, hour: number, minute: number, overrideDate?: Date) => {
+  const getPreviewInfo = useCallback((timezone: string, hour: number, minute: number, overrideDate?: Date) => {
     const now = new Date();
     let triggerDate: Date;
     let cityYear: number;
@@ -265,7 +269,7 @@ export function NotificationModal({
       monthOrYearShiftText,
       dayShiftText,
     };
-  };
+  }, [hasDate, notificationDate]);
 
   useEffect(() => {
     if (!visible) {
@@ -306,7 +310,7 @@ export function NotificationModal({
     setPickerDraftRepeat(source?.repeat || (source?.isDaily ? 'daily' : 'none'));
     setPickerDraftWeekdays(source?.weekdays || []);
     setPickerDraftCityId(selectedCityId ?? null);
-  }, [visible, initialNotification]);
+  }, [visible, initialNotification, selectedCityId]);
 
   const handleDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
     if (selectedDate) {
@@ -452,7 +456,7 @@ export function NotificationModal({
     }
 
     return getPreviewInfo(effectiveTimezone, notificationTime.getHours(), notificationTime.getMinutes());
-  }, [effectiveTimezone, isTimeSelected, notificationTime, hasDate, notificationDate]);
+  }, [effectiveTimezone, getPreviewInfo, isTimeSelected, notificationTime]);
 
   const timePickerLocalPreviewInfo = useMemo(() => {
     if (!effectiveTimezone) {
@@ -460,7 +464,7 @@ export function NotificationModal({
     }
 
     return getPreviewInfo(effectiveTimezone, pickerDraftTime.getHours(), pickerDraftTime.getMinutes());
-  }, [effectiveTimezone, pickerDraftTime, hasDate, notificationDate]);
+  }, [effectiveTimezone, getPreviewInfo, pickerDraftTime]);
 
   const datePickerPreviewInfo = useMemo(() => {
     if (!effectiveTimezone) {
@@ -471,7 +475,7 @@ export function NotificationModal({
     const previewMinute = isTimeSelected ? notificationTime.getMinutes() : pickerDraftTime.getMinutes();
 
     return getPreviewInfo(effectiveTimezone, previewHour, previewMinute, pickerDraftDate);
-  }, [effectiveTimezone, isTimeSelected, notificationTime, pickerDraftTime, pickerDraftDate]);
+  }, [effectiveTimezone, getPreviewInfo, isTimeSelected, notificationTime, pickerDraftTime, pickerDraftDate]);
 
   const openTimePicker = () => {
     const nextPickerTime = new Date(notificationTime);
@@ -566,7 +570,7 @@ export function NotificationModal({
       onRequestClose={onClose}
     >
       <ImageBackground
-        source={require('@/assets/images/bg--main-1.jpg')}
+        source={theme.image.modalBackgroundSource}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
@@ -591,7 +595,7 @@ export function NotificationModal({
             >
               <View style={styles.header}>
                 <Pressable onPress={onClose} style={styles.headerButton}>
-                  <IconCancelOutlined fill="white" />
+                  <IconCancelOutlined fill={theme.text.primary} />
                 </Pressable>
 
                 <View>
@@ -599,7 +603,7 @@ export function NotificationModal({
                 </View>
 
                 <Pressable style={[styles.headerButton, !canSave && styles.headerButtonDisabled]} onPress={handleSave} disabled={isSaving || !canSave}>
-                  <IconConfirmOutlined fill="white" />
+                  <IconConfirmOutlined fill={theme.text.primary} />
                 </Pressable>
               </View>
 
@@ -611,7 +615,7 @@ export function NotificationModal({
                     ) : (
                       <Text style={[styles.actionButtonHintText, styles.actionButtonHintTextCity]}>Choose City...</Text>
                     )}
-                    <IconArrow style={styles.citySelectIcon} fill='#fff' />
+                    <IconArrow style={styles.citySelectIcon} fill={theme.text.primary} />
                   </Pressable>
                 )}
 
@@ -624,7 +628,7 @@ export function NotificationModal({
                 <TextInput
                   style={styles.labelInput}
                   placeholder="Title..."
-                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  placeholderTextColor={theme.text.placeholder}
                   value={notificationLabel}
                   onChangeText={setNotificationLabel}
                   multiline
@@ -633,7 +637,7 @@ export function NotificationModal({
                 <TextInput
                   style={styles.notesInput}
                   placeholder="Notes..."
-                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  placeholderTextColor={theme.text.placeholder}
                   value={notificationNotes}
                   onChangeText={setNotificationNotes}
                   multiline
@@ -642,7 +646,7 @@ export function NotificationModal({
                 <TextInput
                   style={styles.urlInput}
                   placeholder="URL..."
-                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  placeholderTextColor={theme.text.placeholder}
                   value={notificationUrl}
                   onChangeText={setNotificationUrl}
                   autoCapitalize="none"
@@ -657,7 +661,7 @@ export function NotificationModal({
                   {isTimeSelected ? (
                     <>
                       <View style={styles.actionButtonHint}>
-                        <IconClock style={styles.actionButtonHintIcon} fill="rgba(255, 255, 255, 1)" />
+                        <IconClock style={styles.actionButtonHintIcon} fill={theme.text.primary} />
                         <Text style={styles.actionButtonText}>{selectedTimeLabel}</Text>
                       </View>
                       {selectedCityOption && (
@@ -672,7 +676,7 @@ export function NotificationModal({
                     </>
                   ) : (
                     <View style={styles.actionButtonHint}>
-                      <IconClock style={styles.actionButtonHintIcon} fill="rgba(255, 255, 255, 1)" />
+                      <IconClock style={styles.actionButtonHintIcon} fill={theme.text.primary} />
                       <Text style={styles.actionButtonHintText}>Time...</Text>
                     </View>
                   )}
@@ -688,11 +692,11 @@ export function NotificationModal({
                   {hasDate ? (
                     <>
                       <View style={styles.actionButtonHint}>
-                        <IconCalendar style={[styles.actionButtonHintIcon, styles.actionButtonHintIconCalendar]} fill="rgba(255, 255, 255, 1)" />
+                        <IconCalendar style={[styles.actionButtonHintIcon, styles.actionButtonHintIconCalendar]} fill={theme.text.primary} />
                         <Text style={styles.actionButtonText}>{selectedDateLabel}</Text>
 
                         <Pressable style={styles.clearDateButton} onPress={() => setHasDate(false)}>
-                          <IconDelete fill="rgba(255, 255, 204, 1)" />
+                          <IconDelete fill={theme.text.warning} />
                         </Pressable>
                       </View>
 
@@ -717,7 +721,7 @@ export function NotificationModal({
                     </>
                   ) : (
                     <View style={styles.actionButtonHint}>
-                      <IconCalendar style={[styles.actionButtonHintIcon, styles.actionButtonHintIconCalendar]} fill="rgba(255, 255, 255, 1)" />
+                      <IconCalendar style={[styles.actionButtonHintIcon, styles.actionButtonHintIconCalendar]} fill={theme.text.primary} />
                       <Text style={styles.actionButtonHintText}>Date...</Text>
                     </View>
                   )}
@@ -726,15 +730,15 @@ export function NotificationModal({
                 <Pressable style={styles.singleActionButton} onPress={openRepeatPicker}>
                   {repeatLabel ? (
                     <View style={styles.actionButtonHint}>
-                      <IconRepeat style={[styles.actionButtonHintIcon, styles.actionButtonHintIconRepeat]} fill="rgba(255, 255, 255, 1)" />
+                      <IconRepeat style={[styles.actionButtonHintIcon, styles.actionButtonHintIconRepeat]} fill={theme.text.primary} />
                       <Text style={styles.actionButtonText}>{repeatLabel}</Text>
                       <Pressable style={styles.clearDateButton} onPress={clearRepeat}>
-                        <IconDelete fill="rgba(255, 255, 204, 1)" />
+                        <IconDelete fill={theme.text.warning} />
                       </Pressable>
                     </View>
                   ) : (
                     <View style={styles.actionButtonHint}>
-                      <IconRepeat style={[styles.actionButtonHintIcon, styles.actionButtonHintIconRepeat]} fill="rgba(255, 255, 255, 1)" />
+                      <IconRepeat style={[styles.actionButtonHintIcon, styles.actionButtonHintIconRepeat]} fill={theme.text.primary} />
                       <Text style={styles.actionButtonHintText}>{REPEAT_LABELS.chooseRepeat}</Text>
                     </View>
                   )}
@@ -792,7 +796,7 @@ export function NotificationModal({
               display="spinner"
               onChange={handleTimeChange}
               style={styles.timePicker}
-              textColor="#fff"
+              textColor={theme.text.primary}
             />
             {!!timePickerLocalPreviewInfo.timeText && (
               <View style={styles.timePickerLocalTimeBox}>
@@ -817,7 +821,7 @@ export function NotificationModal({
               display="spinner"
               onChange={handleDateChange}
               style={styles.datePicker}
-              textColor="#fff"
+              textColor={theme.text.primary}
             />
             {!!datePickerPreviewInfo.localDateText && (
               <View style={styles.timePickerLocalTimeBox}>
@@ -950,7 +954,7 @@ export function NotificationModal({
                   >
                     <Text style={[styles.weekdayChipText, selected && styles.weekdayChipTextActive]}>{day.label}</Text>
                     {selected && (
-                      <IconCheckmark fill='rgba(255, 255, 255, 1)' style={styles.weekdayChipIcon} />
+                      <IconCheckmark fill={theme.text.primary} style={styles.weekdayChipIcon} />
                     )}
                   </Pressable>
                 );
@@ -963,13 +967,14 @@ export function NotificationModal({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: UiTheme) {
+  return StyleSheet.create({
   backgroundImage: {
     flex: 1,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(62, 63, 86, 0.4)',
+    backgroundColor: theme.overlay.medium,
   },
   modalContent: {
     minHeight: '100%',
@@ -983,21 +988,15 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 33,
-    paddingTop: 20,
+    paddingTop: theme.spacing.modalInnerY,
     paddingBottom: 30,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   title: {
-    color: '#fff',
-    fontSize: 16
-  },
-  subtitle: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 13,
-    marginTop: 2,
-    textAlign: 'center',
+    color: theme.text.primary,
+    fontSize: theme.typography.titleSm.fontSize,
   },
   headerButton: {
     width: 30,
@@ -1007,95 +1006,95 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.screenX,
   },
   cityTitle: {
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginBottom: 10,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.surface.field,
+    marginBottom: theme.spacing.lg,
   },
   cityTitleText: {
-    fontSize: 16,
+    fontSize: theme.typography.control.fontSize,
     fontWeight: 'bold',
-    color: '#fff',
+    color: theme.text.primary,
   },
   actionButtonsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
+    gap: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
   },
   labelInput: {
-    fontSize: 16,
+    fontSize: theme.typography.control.fontSize,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderColor: theme.border.field,
+    backgroundColor: theme.surface.field,
+    borderBottomColor: theme.border.subtle,
+    borderTopLeftRadius: theme.radius.md,
+    borderTopRightRadius: theme.radius.md,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    color: '#ffffff',
+    color: theme.text.primary,
   },
   notesInput: {
     fontSize: 15,
     borderWidth: 1,
     borderTopWidth: 0,
-    borderColor: 'rgba(255, 255, 255, 1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: theme.border.field,
+    backgroundColor: theme.surface.field,
+    borderBottomColor: theme.border.subtle,
     paddingHorizontal: 10,
     paddingVertical: 11,
-    color: '#ffffff',
+    color: theme.text.primary,
   },
   urlInput: {
     fontSize: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: theme.border.field,
+    backgroundColor: theme.surface.field,
     borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
+    borderBottomLeftRadius: theme.radius.md,
+    borderBottomRightRadius: theme.radius.md,
     marginBottom: 14,
     paddingHorizontal: 10,
     paddingVertical: 11,
-    color: '#ffffff',
+    color: theme.text.primary,
   },
   actionButton: {
     paddingVertical: 12,
     paddingHorizontal: 10,
-    borderRadius: 8,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginBottom: 10,
+    borderColor: theme.border.field,
+    backgroundColor: theme.surface.field,
+    marginBottom: theme.spacing.lg,
   },
   actionButtonActive: {
-    borderColor: '#4CAF50',
-    backgroundColor: 'rgba(76, 175, 80, 0.14)',
+    borderColor: theme.border.success,
+    backgroundColor: theme.surface.successSoft,
   },
   actionButtonDisabled: {
     opacity: 0.5,
   },
   actionButtonTextCity: {
-    fontSize: 16,
+    fontSize: theme.typography.control.fontSize,
     fontWeight: 'bold',
   },
   actionButtonText: {
     fontSize: 15,
-    color: '#fff',
+    color: theme.text.primary,
   },
   actionButtonHint: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   actionButtonHintText: {
     fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: theme.text.placeholder,
   },
   actionButtonHintTextCity: {
-    fontSize: 16,
+    fontSize: theme.typography.control.fontSize,
   },
   citySelect: {
     flexDirection: 'row',
@@ -1104,7 +1103,7 @@ const styles = StyleSheet.create({
   citySelectText: {
     flex: 1,
     paddingRight: 10,
-    fontSize: 16,
+    fontSize: theme.typography.control.fontSize,
     fontWeight: 'bold',
   },
   citySelectIcon: {
@@ -1128,110 +1127,110 @@ const styles = StyleSheet.create({
   singleActionButton: {
     paddingVertical: 12,
     paddingHorizontal: 10,
-    borderRadius: 8,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginBottom: 10,
-    fontSize: 16,
+    borderColor: theme.border.field,
+    backgroundColor: theme.surface.field,
+    marginBottom: theme.spacing.lg,
+    fontSize: theme.typography.control.fontSize,
     fontWeight: '600',
   },
   notificationTime: {},
   localTimeBox: {
     borderTopWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: theme.border.subtle,
     marginTop: 11,
     paddingTop: 11,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: theme.spacing.xs,
   },
   localTimeLabel: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: theme.text.placeholder,
   },
   localTime: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   notificationDate: {},
   localDateBox: {
     borderTopWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: theme.border.subtle,
     marginTop: 11,
     paddingTop: 11,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: theme.spacing.xs,
   },
   localDateLabel: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: theme.text.placeholder,
   },
   localDate: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   localDateShift: {
     fontSize: 11,
     paddingHorizontal: 7,
     height: 14,
-    borderRadius: 7,
+    borderRadius: theme.radius.pillSm,
     lineHeight: 13,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    color: 'rgba(63, 68, 86, 0.9)',
+    backgroundColor: theme.surface.button.primary,
+    color: theme.text.onLight,
     marginLeft: 7,
   },
   localDateShiftYear: {
-    backgroundColor: 'rgba(255, 255, 204, 1)',
+    backgroundColor: theme.text.warning,
   },
   localTimeDayShift: {
     fontSize: 11,
     paddingHorizontal: 7,
     height: 14,
-    borderRadius: 7,
+    borderRadius: theme.radius.pillSm,
     lineHeight: 13,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    color: 'rgba(63, 68, 86, 0.9)',
+    backgroundColor: theme.surface.button.primary,
+    color: theme.text.onLight,
     marginLeft: 7,
   },
   repeatPickerList: {
-    gap: 2,
+    gap: theme.spacing.xxs,
     width: 295,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: theme.spacing.screenX,
+    paddingBottom: theme.spacing.screenX,
   },
   repeatPickerItem: {
-    borderRadius: 4,
+    borderRadius: theme.radius.sm,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: theme.surface.fieldStrong,
   },
   repeatPickerItemActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: theme.surface.fieldSelected,
   },
   repeatPickerItemText: {
-    color: '#fff',
+    color: theme.text.primary,
     fontSize: 15,
   },
   repeatPickerItemTextActive: {
     fontWeight: 'bold',
   },
   repeatPickerSecondary: {
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
+    borderTopLeftRadius: theme.radius.sm,
+    borderTopRightRadius: theme.radius.sm,
     borderBottomLeftRadius: 14,
     borderBottomRightRadius: 14,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: theme.surface.fieldStrong,
   },
   weekdaysWrap: {},
   weekdayChip: {
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: theme.border.muted,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -1240,8 +1239,8 @@ const styles = StyleSheet.create({
   },
   weekdayChipActive: {},
   weekdayChipText: {
-    color: '#fff',
-    fontSize: 15
+    color: theme.text.primary,
+    fontSize: 15,
   },
   weekdayChipTextActive: {
     fontWeight: 'bold',
@@ -1256,10 +1255,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     paddingHorizontal: 7,
     height: 14,
-    borderRadius: 7,
+    borderRadius: theme.radius.pillSm,
     lineHeight: 13,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    color: 'rgba(63, 68, 86, 0.9)',
+    backgroundColor: theme.surface.button.primary,
+    color: theme.text.onLight,
     marginLeft: 7,
   },
   clearDateButton: {
@@ -1273,63 +1272,64 @@ const styles = StyleSheet.create({
     height: 140,
   },
   timePickerLocalTimeBox: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingHorizontal: theme.spacing.screenX,
+    paddingVertical: theme.spacing.screenX,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: theme.spacing.xs,
   },
   timePickerLocalTimeLabel: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: theme.text.placeholder,
   },
   timePickerLocalTime: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 1)',
+    color: theme.text.primary,
   },
   timePickerDayShiftText: {
     fontSize: 11,
     paddingHorizontal: 9,
     height: 18,
-    borderRadius: 9,
+    borderRadius: theme.radius.pillMd,
     lineHeight: 17,
-    backgroundColor: 'rgba(255, 255, 255, 1)',
-    color: 'rgba(63, 68, 86, 0.9)',
+    backgroundColor: theme.surface.button.primary,
+    color: theme.text.onLight,
     marginLeft: 'auto',
   },
   datePicker: {
     height: 140,
   },
   label: {
-    color: '#9a9bb2',
+    color: theme.text.muted,
     fontSize: 14,
     marginBottom: 8,
   },
   cityPickerList: {
     maxHeight: '100%',
-    padding: 20,
+    padding: theme.spacing.screenX,
     gap: 6,
   },
   cityPickerItem: {
-    borderRadius: 8,
+    borderRadius: theme.radius.md,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: theme.surface.fieldStrong,
     marginBottom: 6,
   },
   cityPickerItemActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: theme.surface.fieldSelected,
   },
   cityPickerItemLast: {
-    marginBottom: 0
+    marginBottom: 0,
   },
   cityPickerItemText: {
-    color: '#fff',
-    fontSize: 16,
+    color: theme.text.primary,
+    fontSize: theme.typography.control.fontSize,
     fontWeight: '600',
   },
   cityPickerItemHint: {
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: theme.text.placeholder,
     fontSize: 12,
   },
-});
+  });
+}
