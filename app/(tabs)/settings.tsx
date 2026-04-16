@@ -50,6 +50,7 @@ export default function SettingsScreen() {
 
   const languageOptions = [
     { value: 'en' as const, label: languageLabels.en },
+    { value: 'es' as const, label: languageLabels.es },
     { value: 'ru' as const, label: languageLabels.ru },
     { value: 'uk' as const, label: languageLabels.uk },
     { value: 'fr' as const, label: languageLabels.fr },
