@@ -3,6 +3,7 @@ import { Asset } from "expo-asset";
 import * as SQLite from "expo-sqlite";
 
 const DB_NAME = "cities.db";
+const DB_VERSION = 2;
 
 const SQLITE_DIR = Paths.document.uri + "SQLite/";
 const DB_PATH = SQLITE_DIR + DB_NAME;
@@ -17,7 +18,20 @@ export async function ensureCitiesDb(): Promise<void> {
   const dbFile = new File(DB_PATH);
 
   if (dbFile.exists) {
-    return;
+    const db = await SQLite.openDatabaseAsync(DB_NAME);
+
+    try {
+      const versionRow = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
+      const currentVersion = versionRow?.user_version ?? 0;
+
+      if (currentVersion >= DB_VERSION) {
+        return;
+      }
+    } finally {
+      await db.closeAsync();
+    }
+
+    await dbFile.delete();
   }
 
   const asset = Asset.fromModule(require("../assets/db/cities.db"));

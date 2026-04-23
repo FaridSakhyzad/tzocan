@@ -29,7 +29,9 @@ import {
 import { CityNotification, useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
 import { useSettings, TimeFormat, FirstDayOfWeek } from '@/contexts/settings-context';
 import { useI18n } from '@/hooks/use-i18n';
+import { useLocalizedCityNames } from '@/hooks/use-localized-city-names';
 import type { UiTheme } from '@/constants/ui-theme.types';
+import { getCityDisplayName } from '@/utils/city-display';
 
 import ClockIcon from '../../assets/images/icon--clock-2--outlined.svg';
 import CalendarIcon from '../../assets/images/icon--calendar-2--outlined.svg';
@@ -570,6 +572,7 @@ export default function Notifications() {
   const { timeFormat, firstDayOfWeek } = useSettings();
   const { isEditMode } = useEditMode();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const localizedCityNames = useLocalizedCityNames(selectedCities.map((city) => city.cityId));
   const [, setClockTick] = useState(0);
   const [isAddCityModalVisible, setIsAddCityModalVisible] = useState(false);
   const [isAddNotificationModalVisible, setIsAddNotificationModalVisible] = useState(false);
@@ -687,7 +690,7 @@ export default function Notifications() {
 
   const notificationCityOptions = selectedCities.map((city) => ({
     id: city.id,
-    label: city.customName || city.name,
+    label: getCityDisplayName(city, localizedCityNames[city.cityId]),
     hint: city.tz,
     timezone: city.tz,
   }));
@@ -911,7 +914,7 @@ export default function Notifications() {
         <View style={styles.notificationDetails}>
           {options?.showCityName && (
             <Text style={styles.notificationParentCity}>
-              {city.customName || city.name}
+              {getCityDisplayName(city, localizedCityNames[city.cityId])}
             </Text>
           )}
 
@@ -1057,7 +1060,7 @@ export default function Notifications() {
             </Pressable>
           )}
 
-          <Text style={styles.cityName}>{city.customName || city.name}</Text>
+          <Text style={styles.cityName}>{getCityDisplayName(city, localizedCityNames[city.cityId])}</Text>
 
           <Text style={styles.cityHeaderTime}>{getCurrentTimeInTimezone(city.tz, timeFormat, locale)}</Text>
 
@@ -1160,7 +1163,7 @@ export default function Notifications() {
 
       <NotificationModal
         visible={isAddNotificationModalVisible}
-        cityName={selectedAddNotificationCity ? (selectedAddNotificationCity.customName || selectedAddNotificationCity.name) : ''}
+        cityName={selectedAddNotificationCity ? getCityDisplayName(selectedAddNotificationCity, localizedCityNames[selectedAddNotificationCity.cityId]) : ''}
         mode="add"
         citySelectionMode="selectable"
         cityOptions={notificationCityOptions}
@@ -1173,7 +1176,7 @@ export default function Notifications() {
 
       <NotificationModal
         visible={Boolean(editingTarget)}
-        cityName={editingTarget ? (editingTarget.city.customName || editingTarget.city.name) : ''}
+        cityName={editingTarget ? getCityDisplayName(editingTarget.city, localizedCityNames[editingTarget.city.cityId]) : ''}
         cityTimezone={editingTarget?.city.tz}
         mode="edit"
         citySelectionMode="locked"
@@ -1191,7 +1194,7 @@ export default function Notifications() {
 
       <DeleteCityModal
         visible={Boolean(cityPendingDelete)}
-        cityName={cityPendingDelete?.customName || cityPendingDelete?.name || t('city.fallbackName')}
+        cityName={cityPendingDelete ? getCityDisplayName(cityPendingDelete, localizedCityNames[cityPendingDelete.cityId]) : t('city.fallbackName')}
         onClose={handleCloseDeleteCityModal}
         onConfirm={handleConfirmDeleteCity}
       />

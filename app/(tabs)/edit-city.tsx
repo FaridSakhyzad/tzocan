@@ -19,8 +19,10 @@ import { NotificationModal, NotificationFormValues } from '@/components/notifica
 import { DeleteNotificationModal } from '@/components/delete-notification-modal';
 import { getCountryName } from '@/constants/country-names';
 import { useI18n } from '@/hooks/use-i18n';
+import { useLocalizedCityNames } from '@/hooks/use-localized-city-names';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import { getCityBaseName, getCityDisplayName } from '@/utils/city-display';
 
 import ClockIcon from '../../assets/images/icon--clock-2--outlined.svg';
 import CalendarIcon from '../../assets/images/icon--calendar-2--outlined.svg';
@@ -498,6 +500,7 @@ export default function EditCity() {
   const [, setClockTick] = useState(0);
 
   const city = selectedCities.find(c => c.id === Number(cityId));
+  const localizedCityNames = useLocalizedCityNames(city ? [city.cityId] : []);
 
   const [editName, setEditName] = useState(city?.customName || '');
   const [isNotificationModalVisible, setIsNotificationModalVisible] = useState(false);
@@ -607,7 +610,7 @@ export default function EditCity() {
     <>
       <ScrollView style={styles.container}>
         <View style={styles.editCityHeader}>
-          <Text style={styles.cityName}>{city.name}</Text>
+          <Text style={styles.cityName}>{getCityBaseName(city, localizedCityNames[city.cityId])}</Text>
           <Text style={styles.cityCountry}>{getCountryName(city.country, locale)}</Text>
           <View style={styles.cityTimeInfo}>
             <Text style={styles.cityTimezone}>{getCurrentTimeInTimezone(city.tz, timeFormat, locale)}</Text>
@@ -776,7 +779,7 @@ export default function EditCity() {
 
       <NotificationModal
         visible={isNotificationModalVisible}
-        cityName={city.customName || city.name}
+        cityName={getCityDisplayName(city, localizedCityNames[city.cityId])}
         cityTimezone={city.tz}
         mode={editingNotification ? 'edit' : 'add'}
         citySelectionMode="locked"

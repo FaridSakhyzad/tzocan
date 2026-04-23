@@ -41,6 +41,8 @@ import { useAppTheme } from '@/contexts/app-theme-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { useNotificationsSort } from '@/contexts/notifications-sort-context';
 import { useSelectedCities } from '@/contexts/selected-cities-context';
+import { useLocalizedCityNames } from '@/hooks/use-localized-city-names';
+import { getCityDisplayName } from '@/utils/city-display';
 import IconDelete1 from '@/assets/images/icon--delete-2--outlined.svg';
 
 function HeaderButtons() {
@@ -52,6 +54,7 @@ function HeaderButtons() {
   const { isEditMode, toggleEditMode } = useEditMode();
   const { openSortPicker, isSortPickerVisible } = useNotificationsSort();
   const { selectedCities, addCity, addNotification, removeCity } = useSelectedCities();
+  const localizedCityNames = useLocalizedCityNames(selectedCities.map((city) => city.cityId));
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const [isAddCityModalVisible, setIsAddCityModalVisible] = React.useState(false);
   const [isAddNotificationModalVisible, setIsAddNotificationModalVisible] = React.useState(false);
@@ -77,11 +80,11 @@ function HeaderButtons() {
   const notificationCityOptions = React.useMemo(
     () => selectedCities.map((city) => ({
       id: city.id,
-      label: city.customName || city.name,
+      label: getCityDisplayName(city, localizedCityNames[city.cityId]),
       hint: city.tz,
       timezone: city.tz,
     })),
-    [selectedCities]
+    [localizedCityNames, selectedCities]
   );
   const selectedNotificationCity = React.useMemo(
     () => selectedCities.find((city) => city.id === selectedNotificationCityId) || null,
@@ -431,7 +434,7 @@ function HeaderButtons() {
 
       <NotificationModal
         visible={isAddNotificationModalVisible}
-        cityName={selectedNotificationCity ? (selectedNotificationCity.customName || selectedNotificationCity.name) : ''}
+        cityName={selectedNotificationCity ? getCityDisplayName(selectedNotificationCity, localizedCityNames[selectedNotificationCity.cityId]) : ''}
         mode="add"
         citySelectionMode={pathname === '/edit-city' ? 'locked' : 'selectable'}
         cityOptions={notificationCityOptions}
@@ -455,7 +458,7 @@ function HeaderButtons() {
 
       <DeleteCityModal
         visible={isDeleteCityModalVisible}
-        cityName={currentEditCity?.customName || currentEditCity?.name || 'this city'}
+        cityName={currentEditCity ? getCityDisplayName(currentEditCity, localizedCityNames[currentEditCity.cityId]) : 'this city'}
         onClose={handleCloseDeleteCityModal}
         onConfirm={handleConfirmDeleteCity}
       />

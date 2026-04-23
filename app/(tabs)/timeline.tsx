@@ -25,8 +25,10 @@ import type { CityNotification } from '@/contexts/selected-cities-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { CityOrderMode, useNotificationsSort } from '@/contexts/notifications-sort-context';
 import { useI18n } from '@/hooks/use-i18n';
+import { useLocalizedCityNames } from '@/hooks/use-localized-city-names';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import { getCityBaseName, getCityDisplayName } from '@/utils/city-display';
 import { sortCitiesByOrder } from '@/utils/city-sorting';
 
 import IconNotification from '@/assets/images/icon--notification-2.svg';
@@ -433,6 +435,7 @@ export default function TimelineScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [, setClockTick] = useState(0);
   const isFocused = useIsFocused();
+  const localizedCityNames = useLocalizedCityNames(selectedCities.map((city) => city.cityId));
   const [isAddCityModalVisible, setIsAddCityModalVisible] = useState(false);
   const [cityPendingDelete, setCityPendingDelete] = useState<SelectedCity | null>(null);
   const [draftCityOrder, setDraftCityOrder] = useState<CityOrderMode>(sortState.cityOrder);
@@ -643,7 +646,8 @@ export default function TimelineScreen() {
 
           <Text style={styles.listItemTitle} numberOfLines={1}>
             <Text style={styles.listItemTitleCity}>
-              {city.customName || city.name}{city.customName && <> ({city.name})</>}
+              {getCityDisplayName(city, localizedCityNames[city.cityId])}
+              {city.customName && <> ({getCityBaseName(city, localizedCityNames[city.cityId])})</>}
             </Text>
             <Text style={styles.listItemTitleTimeOffset}>{timeZoneLabel}</Text>
           </Text>
@@ -720,7 +724,7 @@ export default function TimelineScreen() {
 
         <DeleteCityModal
           visible={Boolean(cityPendingDelete)}
-          cityName={cityPendingDelete?.customName || cityPendingDelete?.name || t('city.fallbackName')}
+          cityName={cityPendingDelete ? getCityDisplayName(cityPendingDelete, localizedCityNames[cityPendingDelete.cityId]) : t('city.fallbackName')}
           onClose={handleCloseDeleteCityModal}
           onConfirm={handleConfirmDeleteCity}
         />
@@ -804,7 +808,7 @@ export default function TimelineScreen() {
 
       <DeleteCityModal
         visible={Boolean(cityPendingDelete)}
-        cityName={cityPendingDelete?.customName || cityPendingDelete?.name || t('city.fallbackName')}
+        cityName={cityPendingDelete ? getCityDisplayName(cityPendingDelete, localizedCityNames[cityPendingDelete.cityId]) : t('city.fallbackName')}
         onClose={handleCloseDeleteCityModal}
         onConfirm={handleConfirmDeleteCity}
       />

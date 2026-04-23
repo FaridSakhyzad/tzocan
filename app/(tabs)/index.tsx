@@ -19,9 +19,11 @@ import { DeleteCityModal } from '@/components/delete-city-modal';
 import { CitySortPickerModal } from '@/components/city-sort-picker-modal';
 import { TimeRuler } from '@/components/time-ruler';
 import { useI18n } from '@/hooks/use-i18n';
+import { useLocalizedCityNames } from '@/hooks/use-localized-city-names';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import { CityOrderMode, useNotificationsSort } from '@/contexts/notifications-sort-context';
+import { getCityBaseName, getCityDisplayName } from '@/utils/city-display';
 import { sortCitiesByOrder } from '@/utils/city-sorting';
 
 import IconDelete1 from '@/assets/images/icon--delete-1.svg';
@@ -118,6 +120,7 @@ export default function Index() {
   const { sortState, setSortState, isSortPickerVisible, closeSortPicker } = useNotificationsSort();
   const isFocused = useIsFocused();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const localizedCityNames = useLocalizedCityNames(selectedCities.map((city) => city.cityId));
   const [, setTick] = useState(1);
   const [cityPendingDelete, setCityPendingDelete] = useState<SelectedCity | null>(null);
   const [isAddCityModalVisible, setIsAddCityModalVisible] = useState(false);
@@ -255,11 +258,11 @@ export default function Index() {
 
           <View style={styles.cityInfo}>
             <Text style={styles.cityName}>
-              {city.customName || city.name}
+              {getCityDisplayName(city, localizedCityNames[city.cityId])}
             </Text>
 
             {city.customName && (
-              <Text style={styles.cityOriginalName}>{city.name}</Text>
+              <Text style={styles.cityOriginalName}>{getCityBaseName(city, localizedCityNames[city.cityId])}</Text>
             )}
 
             <View style={styles.cityMeta}>
@@ -383,7 +386,7 @@ export default function Index() {
 
         <DeleteCityModal
           visible={Boolean(cityPendingDelete)}
-          cityName={cityPendingDelete?.customName || cityPendingDelete?.name || t('city.fallbackName')}
+          cityName={cityPendingDelete ? getCityDisplayName(cityPendingDelete, localizedCityNames[cityPendingDelete.cityId]) : t('city.fallbackName')}
           onClose={handleCloseDeleteCityModal}
           onConfirm={handleConfirmDeleteCity}
         />

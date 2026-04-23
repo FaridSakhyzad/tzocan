@@ -22,16 +22,67 @@ export type CityRow = {
   pop: number;
 };
 
-async function searchCitiesInDb(db: SQLite.SQLiteDatabase, prefix: string): Promise<CityRow[]> {
-  const p = prefix + "%";
+type SearchCityRow = CityRow & {
+  localizedName?: string | null;
+};
 
-  return db.getAllAsync<CityRow>(
-    `SELECT id, name, country, admin1, tz, lat, lon, pop
-     FROM cities
-     WHERE name_norm LIKE ?
-     ORDER BY pop DESC
+function normalizeSearchText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\s+/g, ' ');
+}
+
+async function searchCitiesInDb(
+  db: SQLite.SQLiteDatabase,
+  prefix: string,
+  languageCode: string
+): Promise<SearchCityRow[]> {
+  const normalizedPrefix = `${normalizeSearchText(prefix)}%`;
+
+  return db.getAllAsync<SearchCityRow>(
+    `WITH matched AS (
+       SELECT id AS city_id, 1 AS match_rank
+       FROM cities
+       WHERE name_norm LIKE ?
+
+       UNION ALL
+
+       SELECT city_id, 0 AS match_rank
+       FROM city_aliases
+       WHERE locale = ?
+         AND name_norm LIKE ?
+     ),
+     dedup AS (
+       SELECT city_id, MIN(match_rank) AS match_rank
+       FROM matched
+       GROUP BY city_id
+     )
+     SELECT
+       c.id,
+       c.name,
+       c.country,
+       c.admin1,
+       c.tz,
+       c.lat,
+       c.lon,
+       c.pop,
+       (
+         SELECT alias.name
+         FROM city_aliases AS alias
+         WHERE alias.city_id = c.id
+           AND alias.locale = ?
+         ORDER BY alias.is_preferred DESC, alias.name ASC
+         LIMIT 1
+       ) AS localizedName
+     FROM dedup AS d
+     JOIN cities AS c
+       ON c.id = d.city_id
+     ORDER BY d.match_rank ASC, c.pop DESC, c.name ASC
      LIMIT 30`,
-    [p]
+    [normalizedPrefix, languageCode, normalizedPrefix, languageCode]
   );
 }
 
@@ -44,12 +95,12 @@ type AddCityModalProps = {
 export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
-  const { t } = useI18n();
+  const { t, languageCode } = useI18n();
   const { db } = useDatabase();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [query, setQuery] = useState('');
-  const [cities, setCities] = useState<CityRow[]>([]);
-  const [selectedCity, setSelectedCity] = useState<CityRow | null>(null);
+  const [cities, setCities] = useState<SearchCityRow[]>([]);
+  const [selectedCity, setSelectedCity] = useState<SearchCityRow | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -73,7 +124,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
       setIsLoading(true);
 
       try {
-        const results = await searchCitiesInDb(db as SQLite.SQLiteDatabase, query);
+        const results = await searchCitiesInDb(db as SQLite.SQLiteDatabase, query, languageCode);
         setCities(results);
       } catch (error) {
         console.error('Failed to search cities:', error);
@@ -86,9 +137,9 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [query, visible, db]);
+  }, [query, visible, db, languageCode]);
 
-  const handleCityPress = (city: CityRow) => {
+  const handleCityPress = (city: SearchCityRow) => {
     setSelectedCity(city);
   };
 
@@ -97,7 +148,8 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
       return;
     }
 
-    onSave(selectedCity);
+    const { id, name, country, admin1, tz, lat, lon, pop } = selectedCity;
+    onSave({ id, name, country, admin1, tz, lat, lon, pop });
     setQuery('');
     setCities([]);
     setSelectedCity(null);
@@ -179,7 +231,12 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                           pressed && styles.cityItemPressed,
                         ]}
                       >
-                        <Text style={styles.cityText}>{city.name}, {city.country}</Text>
+                        <Text style={styles.cityText}>
+                          {city.localizedName || city.name}, {city.country}
+                        </Text>
+                        {!!city.localizedName && city.localizedName !== city.name && (
+                          <Text style={styles.citySecondaryText}>{city.name}</Text>
+                        )}
                         <Text style={styles.cityTimezone}>{city.tz}</Text>
                       </Pressable>
                     ))}
@@ -276,6 +333,12 @@ function createStyles(theme: UiTheme) {
       lineHeight: 16,
       color: theme.text.primary,
       marginBottom: 1,
+    },
+    citySecondaryText: {
+      fontSize: 13,
+      lineHeight: 15,
+      color: theme.text.secondary,
+      marginBottom: 2,
     },
     cityTimezone: {
       fontSize: 13,
