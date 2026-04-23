@@ -1,6 +1,7 @@
 import { Pressable, PressableProps, StyleSheet, Text, TextInput, TextInputProps } from 'react-native';
 
 import { useDetailScreenStyles } from '@/components/detail-screen-shell';
+import { LoadingSpinner } from '@/components/loading-spinner';
 import { useAppTheme } from '@/contexts/app-theme-context';
 
 export function DetailTextField(props: TextInputProps) {
@@ -33,10 +34,12 @@ export function DetailTextArea(props: TextInputProps) {
 
 type DetailPrimaryButtonProps = PressableProps & {
   label: string;
+  loading?: boolean;
 };
 
 export function DetailPrimaryButton({
   label,
+  loading = false,
   disabled,
   style,
   ...props
@@ -53,7 +56,11 @@ export function DetailPrimaryButton({
         style,
       ]}
     >
-      <Text style={detailScreenStyles.primaryButtonText}>{label}</Text>
+      {loading ? (
+        <LoadingSpinner size={22} />
+      ) : (
+        <Text style={detailScreenStyles.primaryButtonText}>{label}</Text>
+      )}
     </Pressable>
   );
 }

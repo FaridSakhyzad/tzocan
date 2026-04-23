@@ -1,12 +1,23 @@
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Linking, Text, View } from 'react-native';
+import * as MailComposer from 'expo-mail-composer';
 
 import { DetailScreenShell, useDetailScreenStyles } from '@/components/detail-screen-shell';
 import { DetailPrimaryButton, DetailTextArea, DetailTextField, detailFormStyles } from '@/components/detail-form';
+import { CONTACT_EMAIL } from '@/constants/app-config';
 import { useI18n } from '@/hooks/use-i18n';
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function buildMailtoUrl(email: string, subject: string, body: string) {
+  const query = [
+    `subject=${encodeURIComponent(subject)}`,
+    `body=${encodeURIComponent(body)}`,
+  ].join('&');
+
+  return `mailto:${encodeURIComponent(email)}?${query}`;
 }
 
 export default function ContactScreen() {
@@ -15,19 +26,70 @@ export default function ContactScreen() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [wasSubmitted, setWasSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
 
   const canSend = useMemo(() => {
     return isValidEmail(email) && message.trim().length > 0;
   }, [email, message]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!canSend) {
       return;
     }
 
-    setWasSubmitted(true);
-    setEmail('');
-    setMessage('');
+    if (!CONTACT_EMAIL) {
+      setSubmitError(t('contact.configMissing'));
+      setWasSubmitted(false);
+      return;
+    }
+
+    setIsSending(true);
+    setSubmitError(null);
+
+    try {
+      const subject = t('contact.subject');
+      const body = [`From: ${email.trim()}`, '', message.trim()].join('\n');
+      const isAvailable = await MailComposer.isAvailableAsync();
+
+      if (isAvailable) {
+        const result = await MailComposer.composeAsync({
+          recipients: [CONTACT_EMAIL],
+          subject,
+          body,
+        });
+
+        if (
+          result.status === MailComposer.MailComposerStatus.SENT ||
+          result.status === MailComposer.MailComposerStatus.SAVED
+        ) {
+          setWasSubmitted(true);
+          setEmail('');
+          setMessage('');
+        } else {
+          setWasSubmitted(false);
+        }
+      } else {
+        const mailtoUrl = buildMailtoUrl(CONTACT_EMAIL, subject, body);
+        const canOpenMailto = await Linking.canOpenURL(mailtoUrl);
+
+        if (!canOpenMailto) {
+          setSubmitError(t('contact.unavailable'));
+          setWasSubmitted(false);
+          return;
+        }
+
+        await Linking.openURL(mailtoUrl);
+        setWasSubmitted(true);
+        setEmail('');
+        setMessage('');
+      }
+    } catch {
+      setSubmitError(t('contact.failed'));
+      setWasSubmitted(false);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -44,6 +106,7 @@ export default function ContactScreen() {
             onChangeText={(value) => {
               setEmail(value);
               setWasSubmitted(false);
+              setSubmitError(null);
             }}
             autoCorrect={false}
             autoCapitalize="none"
@@ -58,6 +121,7 @@ export default function ContactScreen() {
             onChangeText={(value) => {
               setMessage(value);
               setWasSubmitted(false);
+              setSubmitError(null);
             }}
           />
         </View>
@@ -74,10 +138,17 @@ export default function ContactScreen() {
           </Text>
         )}
 
+        {submitError && (
+          <Text style={detailScreenStyles.helperText}>
+            {submitError}
+          </Text>
+        )}
+
         <DetailPrimaryButton
           label={t('common.send')}
+          loading={isSending}
           onPress={handleSend}
-          disabled={!canSend}
+          disabled={!canSend || isSending}
         />
       </View>
     </DetailScreenShell>

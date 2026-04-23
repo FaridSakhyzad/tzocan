@@ -9,6 +9,7 @@ import { useDatabase } from '@/hooks/use-database';
 import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import { LoadingSpinner } from '@/components/loading-spinner';
 
 export type CityRow = {
   id: number;
@@ -160,24 +161,30 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                   autoFocus
                 />
 
-                {isLoading && <Text style={styles.loading}>{t('common.loading')}</Text>}
+                {isLoading && (
+                  <View style={styles.loadingBlock}>
+                    <LoadingSpinner />
+                  </View>
+                )}
 
-                <ScrollView style={styles.resultsList} showsVerticalScrollIndicator={false}>
-                  {cities.map((city) => (
-                    <Pressable
-                      key={`${city.id}-${city.name}-${city.country}`}
-                      onPress={() => handleCityPress(city)}
-                      style={({ pressed }) => [
-                        styles.cityItem,
-                        selectedCity?.id === city.id && styles.cityItemSelected,
-                        pressed && styles.cityItemPressed,
-                      ]}
-                    >
-                      <Text style={styles.cityText}>{city.name}, {city.country}</Text>
-                      <Text style={styles.cityTimezone}>{city.tz}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                {!isLoading && cities.length > 0 && (
+                  <ScrollView style={styles.resultsList} showsVerticalScrollIndicator={false}>
+                    {cities.map((city) => (
+                      <Pressable
+                        key={`${city.id}-${city.name}-${city.country}`}
+                        onPress={() => handleCityPress(city)}
+                        style={({ pressed }) => [
+                          styles.cityItem,
+                          selectedCity?.id === city.id && styles.cityItemSelected,
+                          pressed && styles.cityItemPressed,
+                        ]}
+                      >
+                        <Text style={styles.cityText}>{city.name}, {city.country}</Text>
+                        <Text style={styles.cityTimezone}>{city.tz}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                )}
               </View>
             </View>
           </KeyboardAvoidingView>
@@ -216,8 +223,7 @@ function createStyles(theme: UiTheme) {
       alignItems: 'center',
     },
     title: {
-      fontSize: theme.typography.titleLg.fontSize,
-      fontWeight: '600',
+      fontSize: 16,
       color: theme.text.primary,
     },
     cancelButton: {
@@ -243,9 +249,10 @@ function createStyles(theme: UiTheme) {
       backgroundColor: theme.surface.field,
       color: theme.text.primary,
     },
-    loading: {
-      color: theme.text.muted,
-      marginBottom: 8,
+    loadingBlock: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     resultsList: {
       flex: 1,
@@ -263,8 +270,6 @@ function createStyles(theme: UiTheme) {
     },
     cityItemSelected: {
       backgroundColor: theme.surface.fieldSelected,
-      borderWidth: 1,
-      borderColor: theme.border.faint,
     },
     cityText: {
       fontSize: theme.typography.control.fontSize,

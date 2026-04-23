@@ -8,6 +8,7 @@ type RepeatMode = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export type CityNotification = {
   id: string;
+  createdAt?: number;
   year?: number;
   month?: number;
   day?: number;
@@ -545,6 +546,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
 
     const newNotification: CityNotification = {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: Date.now(),
       year,
       month,
       day,

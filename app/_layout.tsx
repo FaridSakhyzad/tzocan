@@ -12,6 +12,7 @@ import { SelectedCitiesProvider } from '@/contexts/selected-cities-context';
 import { SettingsProvider } from '@/contexts/settings-context';
 import { AppThemeProvider, useAppTheme } from '@/contexts/app-theme-context';
 import { EditModeProvider } from '@/contexts/edit-mode-context';
+import { NotificationsSortProvider } from '@/contexts/notifications-sort-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -93,7 +94,9 @@ export default function RootLayout() {
         <AppThemeProvider>
           <SelectedCitiesProvider>
             <EditModeProvider>
-              <AppShell />
+              <NotificationsSortProvider>
+                <AppShell />
+              </NotificationsSortProvider>
             </EditModeProvider>
           </SelectedCitiesProvider>
         </AppThemeProvider>

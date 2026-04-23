@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, Pressable, ScrollView } from 'react-native';
 
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 
@@ -16,17 +16,25 @@ import type { SharedValue } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
+import { AddCityModal, type CityRow } from '@/components/add-city-modal';
+import { CitySortPickerModal } from '@/components/city-sort-picker-modal';
+import { DeleteCityModal } from '@/components/delete-city-modal';
 import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
 import { useSettings } from '@/contexts/settings-context';
 import type { CityNotification } from '@/contexts/selected-cities-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
+import { CityOrderMode, useNotificationsSort } from '@/contexts/notifications-sort-context';
 import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import { sortCitiesByOrder } from '@/utils/city-sorting';
 
 import IconNotification from '@/assets/images/icon--notification-2.svg';
 import IconReset from '@/assets/images/icon--reset-1.svg';
 import Arrow1 from '@/assets/images/icon--arrow-1.svg';
+import IconAddCity from '@/assets/images/icon--cities--outlined.svg';
+
+import IconDelete from '@/assets/images/icon--delete-3.svg';
 
 const TIMELINE_CLOCK_REFRESH_INTERVAL_MS = 5000;
 
@@ -239,15 +247,12 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
 
     return Gesture.Pan()
       .enabled(enabled)
-      // активируемся только при заметном горизонтальном движении
       .activeOffsetX([-12, 12])
-      // если пользователь уходит по Y — отдаём жест вертикальному скроллу списка
       .failOffsetY([-12, 12])
       .onBegin(() => {
         startX.value = x.value;
       })
       .onUpdate((e) => {
-        // x растёт при свайпе влево
         const next = startX.value - e.translationX;
         if (next < minX) {
           const over = minX - next;
@@ -292,7 +297,6 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
     transform: [{ translateX: -x.value - rowOffsetHours * CELL_W }],
   }));
 
-  // Per-row centerable hour range, accounting for timezone row shift.
   const centerBase = sidePad + CELL_W / 2 - width / 2;
   const minCenterHourIndex = Math.ceil(rowOffsetHours + (minX - centerBase) / CELL_W - 1e-6);
   const maxCenterHourIndex = Math.floor(rowOffsetHours + (maxX - centerBase) / CELL_W + 1e-6);
@@ -317,20 +321,29 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
             const isOutsideScrollLimits = isLeftOutsideScrollLimit || isRightOutsideScrollLimit;
             const isFirstLeftOutside = i === minCenterHourIndex - 1;
             const isFirstRightOutside = i === maxCenterHourIndex + 1;
+
             const shouldFillOutsideBackground =
               (isLeftOutsideScrollLimit && !isFirstLeftOutside) ||
               (isRightOutsideScrollLimit && !isFirstRightOutside);
+
             const shouldUseOutsideTextColor = shouldFillOutsideBackground;
+
             const isMidnight = normalizedHour === 0;
+
             const dayOffset = Math.floor(absoluteHour / DAY_HOURS);
             const count = isMainDayHour ? (hourlyCounts[normalizedHour] || 0) : 0;
             const dayDate = new Date(selectedDay);
+
             dayDate.setDate(selectedDay.getDate() + dayOffset);
 
-            const dayDateLabel = dayDate.toLocaleDateString(locale, {
-              day: '2-digit',
-              month: '2-digit',
-            });
+            const dayDateWeekday = new Intl.DateTimeFormat('en-US', {
+              weekday: 'short',
+            }).format(dayDate);
+
+            const dayDateMonthDay = new Intl.DateTimeFormat('en-US', {
+              month: 'short',
+              day: 'numeric',
+            }).format(dayDate);
 
             return (
               <View
@@ -347,16 +360,48 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
                     shouldFillOutsideBackground && styles.hourBlockOutsideFilled,
                   ]}
                 >
-                  {isMidnight ? (
-                    <Text style={[styles.hourBlockDate, shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled]}>{dayDateLabel}</Text>
-                  ) : timeFormat === '12h' ? (
+                  {shouldUseOutsideTextColor && (
                     <>
-                      <Text style={[styles.hourBlockHour, shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled]}>{(hour === 0 ? 12 : hour)}</Text>
-                      <Text style={[styles.hourBlockAmPM, shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled]}>{ampm}</Text>
+                      {isTomorrowHour ? (
+                        <Text>Right</Text>
+                      ) : (
+                        <Text>Left</Text>
+                      )}
                     </>
-                  ) : (
-                    <Text style={[styles.hourBlockHour, shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled]}>{hour}</Text>
                   )}
+
+                  {isMidnight && (
+                    <View style={styles.hourBlockDate}>
+                      <Text
+                        style={[
+                          styles.hourBlockDateWeekday,
+                          shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled,
+                        ]}
+                      >
+                        {dayDateWeekday}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.hourBlockDateMonthDay,
+                          shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled,
+                        ]}
+                      >
+                        {dayDateMonthDay}
+                      </Text>
+                    </View>
+                  )}
+
+                  {!isMidnight && !shouldUseOutsideTextColor && (
+                    timeFormat === '12h' ? (
+                      <>
+                        <Text style={[styles.hourBlockHour]}>{(hour === 0 ? 12 : hour)}</Text>
+                        <Text style={[styles.hourBlockAmPM]}>{ampm}</Text>
+                      </>
+                    ) : (
+                      <Text style={[styles.hourBlockHour]}>{hour}</Text>
+                    )
+                  )}
+
                   {count > 0 && (
                     <View style={styles.notificationCountBadge}>
                       <IconNotification
@@ -381,12 +426,16 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
 export default function TimelineScreen() {
   const { theme } = useAppTheme();
   const { locale, t } = useI18n();
-  const { selectedCities, reorderCities } = useSelectedCities();
+  const { selectedCities, reorderCities, addCity, removeCity } = useSelectedCities();
   const { timeFormat } = useSettings();
   const { isEditMode } = useEditMode();
+  const { sortState, setSortState, isSortPickerVisible, closeSortPicker } = useNotificationsSort();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [, setClockTick] = useState(0);
   const isFocused = useIsFocused();
+  const [isAddCityModalVisible, setIsAddCityModalVisible] = useState(false);
+  const [cityPendingDelete, setCityPendingDelete] = useState<SelectedCity | null>(null);
+  const [draftCityOrder, setDraftCityOrder] = useState<CityOrderMode>(sortState.cityOrder);
 
   useEffect(() => {
     if (!isFocused) {
@@ -403,13 +452,23 @@ export default function TimelineScreen() {
     return () => clearInterval(timer);
   }, [isFocused]);
 
+  useEffect(() => {
+    if (isSortPickerVisible && isFocused) {
+      setDraftCityOrder(sortState.cityOrder);
+    }
+  }, [isFocused, isSortPickerVisible, sortState.cityOrder]);
+
   const { width } = useWindowDimensions();
+  const displayedCities = useMemo(
+    () => sortCitiesByOrder(selectedCities, sortState.cityOrder, locale),
+    [locale, selectedCities, sortState.cityOrder]
+  );
   const { offsetsMap, minOffset, maxOffset } = useMemo(() => {
     const map = new Map<number, number>();
     let min = 0;
     let max = 0;
 
-    selectedCities.forEach((city) => {
+    displayedCities.forEach((city) => {
       const offset = getTimezoneOffsetHours(city.tz);
       map.set(city.id, offset);
       if (offset < min) min = offset;
@@ -417,7 +476,7 @@ export default function TimelineScreen() {
     });
 
     return { offsetsMap: map, minOffset: min, maxOffset: max };
-  }, [selectedCities]);
+  }, [displayedCities]);
 
   const leftPadHours = Math.ceil(Math.max(0, -minOffset)) + EDGE_EXTRA_HOURS;
   const rightPadHours = Math.ceil(Math.max(0, maxOffset)) + EDGE_EXTRA_HOURS;
@@ -476,6 +535,36 @@ export default function TimelineScreen() {
   }), [selectedDay]);
   const selectedWeekday = selectedDay.getDay();
 
+  const handleOpenAddCityModal = useCallback(() => {
+    setIsAddCityModalVisible(true);
+  }, []);
+
+  const handleCloseAddCityModal = useCallback(() => {
+    setIsAddCityModalVisible(false);
+  }, []);
+
+  const handleSaveCity = useCallback((city: CityRow) => {
+    addCity(city);
+    setIsAddCityModalVisible(false);
+  }, [addCity]);
+
+  const handleOpenDeleteCityModal = useCallback((city: SelectedCity) => {
+    setCityPendingDelete(city);
+  }, []);
+
+  const handleCloseDeleteCityModal = useCallback(() => {
+    setCityPendingDelete(null);
+  }, []);
+
+  const handleConfirmDeleteCity = useCallback(() => {
+    if (!cityPendingDelete) {
+      return;
+    }
+
+    removeCity(cityPendingDelete.id);
+    setCityPendingDelete(null);
+  }, [cityPendingDelete, removeCity]);
+
   const shiftSelectedDay = useCallback((days: number) => {
     setSelectedDay((prev) => {
       const next = new Date(prev);
@@ -518,9 +607,13 @@ export default function TimelineScreen() {
     return `${month}, ${day}`;
   }, [locale, selectedDay]);
 
-  const renderItem = ({ item: city, drag, isActive }: RenderItemParams<SelectedCity>) => {
+  const renderCityRow = (
+    city: SelectedCity,
+    options?: { drag?: () => void; isActive?: boolean; draggable?: boolean }
+  ) => {
     const timezoneOffset = offsetsMap.get(city.id) || 0;
     const hourlyCounts = getHourlyNotificationCounts(city, selectedYmd, selectedWeekday);
+    const canDrag = Boolean(options?.draggable && sortState.cityOrder === 'none');
 
     let timeZoneLabel;
 
@@ -533,56 +626,107 @@ export default function TimelineScreen() {
     }
 
     return (
-      <ScaleDecorator>
-        <Pressable
-          onLongPress={isEditMode ? drag : undefined}
-          delayLongPress={150}
-          style={[styles.listItem, isActive && styles.listItemDragging]}
-        >
-          <View style={styles.listItemHeader}>
-            {isEditMode && (
-              <Pressable
-                onLongPress={drag}
-                delayLongPress={150}
-                style={styles.dragHandle}
-              >
-                <Text style={styles.dragHandleText}>☰</Text>
-              </Pressable>
-            )}
+      <Pressable
+        onLongPress={canDrag ? options?.drag : undefined}
+        delayLongPress={150}
+        style={[styles.listItem, options?.isActive && styles.listItemDragging]}
+      >
+        <View style={styles.listItemHeader}>
+          {isEditMode && canDrag && (
+            <Pressable
+              onPress={options?.drag}
+              style={styles.dragHandle}
+            >
+              <Text style={styles.dragHandleText}>☰</Text>
+            </Pressable>
+          )}
 
-            <Text style={styles.listItemTitle} numberOfLines={1}>
-              <Text style={styles.listItemTitleCity}>
-                {city.customName || city.name}{city.customName && <> ({city.name})</>}
-              </Text>
-              <Text style={styles.listItemTitleTimeOffset}>{timeZoneLabel}</Text>
+          <Text style={styles.listItemTitle} numberOfLines={1}>
+            <Text style={styles.listItemTitleCity}>
+              {city.customName || city.name}{city.customName && <> ({city.name})</>}
             </Text>
+            <Text style={styles.listItemTitleTimeOffset}>{timeZoneLabel}</Text>
+          </Text>
 
-            <Text style={styles.listItemCurrentTime} numberOfLines={1}>
-              {getCurrentTimeInTimezone(city.tz, locale, timeFormat)}
-            </Text>
-          </View>
+          <Text style={styles.listItemCurrentTime} numberOfLines={1}>
+            {getCurrentTimeInTimezone(city.tz, locale, timeFormat)}
+          </Text>
 
-          <Timeline
-            x={x}
-            minX={minScrollX}
-            maxX={maxScrollX}
-            enabled={!dragging && !isEditMode}
-            sidePad={sidePad}
-            selectedDay={selectedDay}
-            onEdgeDayShift={handleEdgeDayShift}
-            rowOffsetHours={timezoneOffset}
-            totalHours={totalHours}
-            dayStartIndex={leftPadHours}
-            timelineWidth={timelineWidth}
-            hourlyCounts={hourlyCounts}
-            timeFormat={timeFormat}
-            width={width}
-            locale={locale}
-          />
-        </Pressable>
-      </ScaleDecorator>
+          {isEditMode && (
+            <Pressable
+              onPress={() => handleOpenDeleteCityModal(city)}
+              style={styles.deleteButton}
+            >
+              <IconDelete fill={theme.text.warning} style={styles.deleteButtonIcon} />
+            </Pressable>
+          )}
+        </View>
+
+        <Timeline
+          x={x}
+          minX={minScrollX}
+          maxX={maxScrollX}
+          enabled={!dragging && !isEditMode}
+          sidePad={sidePad}
+          selectedDay={selectedDay}
+          onEdgeDayShift={handleEdgeDayShift}
+          rowOffsetHours={timezoneOffset}
+          totalHours={totalHours}
+          dayStartIndex={leftPadHours}
+          timelineWidth={timelineWidth}
+          hourlyCounts={hourlyCounts}
+          timeFormat={timeFormat}
+          width={width}
+          locale={locale}
+        />
+      </Pressable>
     )
   };
+
+  const renderItem = ({ item: city, drag, isActive }: RenderItemParams<SelectedCity>) => {
+    return (
+      <ScaleDecorator>
+        {renderCityRow(city, { drag, isActive, draggable: true })}
+      </ScaleDecorator>
+    );
+  };
+
+  const handleApplyCitySort = useCallback(() => {
+    setSortState({
+      ...sortState,
+      cityOrder: draftCityOrder,
+    });
+    closeSortPicker();
+  }, [closeSortPicker, draftCityOrder, setSortState, sortState]);
+
+  if (selectedCities.length < 1) {
+    return (
+      <>
+        <View style={styles.emptyStateContainer}>
+          <Pressable
+            onPress={handleOpenAddCityModal}
+            style={styles.emptyStateButton}
+          >
+            <IconAddCity style={styles.emptyStateButtonIcon} fill={theme.surface.button.primary} />
+            <Text style={styles.emptyStateButtonText}>{t('common.addCity')}</Text>
+          </Pressable>
+        </View>
+
+        <AddCityModal
+          visible={isAddCityModalVisible}
+          onClose={handleCloseAddCityModal}
+          onSave={handleSaveCity}
+        />
+
+        <DeleteCityModal
+          visible={Boolean(cityPendingDelete)}
+          cityName={cityPendingDelete?.customName || cityPendingDelete?.name || t('city.fallbackName')}
+          onClose={handleCloseDeleteCityModal}
+          onConfirm={handleConfirmDeleteCity}
+        />
+      </>
+    )
+  }
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -591,19 +735,29 @@ export default function TimelineScreen() {
           ...styles.middleMarker,
           left: width / 2 - CELL_W / 2
         }} />
-        <DraggableFlatList
-          contentContainerStyle={styles.listContent}
-          data={selectedCities}
-          keyExtractor={(c) => `${c.id}`}
-          renderItem={renderItem}
-          onDragBegin={() => setDragging(true)}
-          onDragEnd={({ data }) => {
-            reorderCities(data);
-            setDragging(false);
-          }}
-          activationDistance={12}
-          scrollEnabled={!isEditMode || !dragging}
-        />
+        {sortState.cityOrder === 'none' ? (
+          <DraggableFlatList
+            contentContainerStyle={styles.listContent}
+            data={selectedCities}
+            keyExtractor={(c) => `${c.id}`}
+            renderItem={renderItem}
+            onDragBegin={() => setDragging(true)}
+            onDragEnd={({ data }) => {
+              reorderCities(data);
+              setDragging(false);
+            }}
+            activationDistance={12}
+            scrollEnabled={!isEditMode || !dragging}
+          />
+        ) : (
+          <ScrollView contentContainerStyle={styles.listContent}>
+            {displayedCities.map((city) => (
+              <View key={`sorted-city-${city.id}`}>
+                {renderCityRow(city)}
+              </View>
+            ))}
+          </ScrollView>
+        )}
       </Animated.View>
       <View style={styles.resetBar} pointerEvents="box-none">
         <Pressable style={styles.resetButtonPressable} onPress={resetToLocalHour}>
@@ -641,6 +795,27 @@ export default function TimelineScreen() {
           </Pressable>
         </View>
       </View>
+
+      <AddCityModal
+        visible={isAddCityModalVisible}
+        onClose={handleCloseAddCityModal}
+        onSave={handleSaveCity}
+      />
+
+      <DeleteCityModal
+        visible={Boolean(cityPendingDelete)}
+        cityName={cityPendingDelete?.customName || cityPendingDelete?.name || t('city.fallbackName')}
+        onClose={handleCloseDeleteCityModal}
+        onConfirm={handleConfirmDeleteCity}
+      />
+
+      <CitySortPickerModal
+        visible={isFocused && isSortPickerVisible}
+        cityOrder={draftCityOrder}
+        onChangeCityOrder={setDraftCityOrder}
+        onClose={closeSortPicker}
+        onApply={handleApplyCitySort}
+      />
     </GestureHandlerRootView>
   );
 }
@@ -649,215 +824,250 @@ const DAY_SELECTOR_HEIGHT = 60;
 
 function createStyles(theme: UiTheme) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  listFadeContainer: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  listContent: {
-    paddingTop: 0,
-    paddingBottom: 0,
-  },
-  middleMarker: {
-    position: 'absolute',
-    top: 0,
-    bottom: DAY_SELECTOR_HEIGHT,
-    left: 0,
-    width: CELL_W,
-    height: 3000,
-    backgroundColor: theme.surface.elevatedSoft,
-  },
-  timelineViewport: {
-    overflow: 'hidden',
-    paddingBottom: 11
-  },
-  listItem: {
-    paddingTop: 11,
-  },
-  listItemDragging: {
-    backgroundColor: theme.surface.elevatedSoft,
-  },
-  listItemHeader: {
-    paddingHorizontal: 22,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dragHandle: {
-    paddingRight: 10,
-    paddingVertical: 4,
-  },
-  dragHandleText: {
-    fontSize: 20,
-    lineHeight: 20,
-    color: theme.text.secondary,
-  },
-  listItemTitle: {
-    flex: 1,
-  },
-  listItemTitleCity: {
-    fontSize: 16,
-    lineHeight: 18,
-    fontWeight: 'bold',
-    color: theme.text.primary,
-  },
-  listItemTitleTimeOffset: {
-    fontSize: 16,
-    lineHeight: 18,
-    flex: 1,
-    color: theme.text.primary,
-  },
-  listItemCurrentTime: {
-    fontSize: 16,
-    lineHeight: 18,
-    color: theme.text.primary,
-    textAlign: 'right',
-  },
-  hourBox: {
-    width: CELL_W,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hourBlock: {
-    width: 64,
-    height: 64,
-    paddingTop: 4,
-    borderRadius: theme.radius.lg,
-    backgroundColor: theme.surface.fieldStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: theme.text.helper,
-  },
-  hourBlock12hFormat: {
-    paddingTop: 8,
-    justifyContent: 'flex-start',
-  },
-  hourBlockHour: {
-    fontSize: 36,
-    lineHeight: 36,
-    fontWeight: '300',
-    color: theme.text.primary,
-  },
-  hourBlockDate: {
-    fontSize: 18,
-    lineHeight: 20,
-    fontWeight: '600',
-    color: theme.text.primary,
-    marginTop: 16,
-  },
-  hourBlockAmPM: {
-    fontSize: 14,
-    lineHeight: 14,
-    color: theme.text.primary,
-    top: -3,
-  },
-  hourBlockYesterday: {
-    opacity: 0.3,
-  },
-  hourBlockTomorrow: {
-    opacity: 0.65,
-  },
-  hourBlockAfterLimit: {},
-  hourBlockOutsideFilled: {
-    borderWidth: 1,
-    borderColor: theme.text.onLight,
-    backgroundColor: theme.surface.button.primary,
-  },
-  hourBlockTextOutsideFilled: {
-    color: theme.text.onLight,
-  },
-  notificationCountBadge: {
-    position: 'absolute',
-    bottom: -8,
-    minWidth: 18,
-    height: 15,
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    flexDirection: 'row',
-    gap: 2,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.surface.button.primary,
-  },
-  notificationCountIcon: {
-    width: 9,
-    height: 9,
-  },
-  notificationCountText: {
-    fontSize: 12,
-    lineHeight: 13,
-    color: theme.text.onLight,
-  },
-  resetBar: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  resetButtonPressable: {
-    position: 'absolute',
-    bottom: -10,
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resetButton: {
-    borderRadius: theme.radius.lg,
-    width: 20,
-    height: 20,
-    backgroundColor: theme.surface.button.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resetButtonIcon: {
-    width: 12,
-    height: 12,
-  },
-  daySelectorBar: {
-    height: 60,
-    borderTopWidth: 1,
-    borderColor: theme.border.muted,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  daySelector: {
-    width: 256,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  daySelectorButton: {
-    width: 36,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.surface.button.subtle,
-  },
-  daySelectorButtonIcon: {
-    width: 7,
-    height: 12,
-  },
-  daySelectorButtonIconRight: {
-    transform: [{ rotate: '180deg'}],
-  },
-  daySelectorCenter: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'column',
-  },
-  daySelectorWeekdayText: {
-    color: theme.text.primary,
-    fontSize: 14,
-  },
-  daySelectorDateText: {
-    color: theme.text.primary,
-    fontSize: 18,
-  },
+    emptyStateContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyStateButton: {
+      alignItems: 'center',
+    },
+    emptyStateButtonIcon: {
+      width: 20,
+      height: 20,
+      marginBottom: 20,
+    },
+    emptyStateButtonText: {
+      fontSize: 16,
+      color: theme.text.primary,
+    },
+    container: {
+      flex: 1,
+    },
+    listFadeContainer: {
+      flex: 1,
+      overflow: 'hidden',
+    },
+    listContent: {
+      paddingTop: 0,
+      paddingBottom: 0,
+    },
+    middleMarker: {
+      position: 'absolute',
+      top: 0,
+      bottom: DAY_SELECTOR_HEIGHT,
+      left: 0,
+      width: CELL_W,
+      height: 3000,
+      backgroundColor: theme.surface.elevatedSoft,
+    },
+    timelineViewport: {
+      overflow: 'hidden',
+      paddingBottom: 11
+    },
+    listItem: {
+      paddingTop: 11,
+    },
+    listItemDragging: {
+      backgroundColor: theme.surface.elevatedSoft,
+    },
+    listItemHeader: {
+      paddingHorizontal: 22,
+      paddingBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    dragHandle: {
+      marginRight: 10,
+    },
+    dragHandleText: {
+      fontSize: 20,
+      lineHeight: 20,
+      color: theme.text.secondary,
+    },
+    deleteButton: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.text.warning,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginLeft: 10,
+    },
+    deleteButtonIcon: {},
+    listItemTitle: {
+      flex: 1,
+    },
+    listItemTitleCity: {
+      fontSize: 16,
+      lineHeight: 20,
+      fontWeight: 'bold',
+      color: theme.text.primary,
+    },
+    listItemTitleTimeOffset: {
+      fontSize: 16,
+      lineHeight: 20,
+      flex: 1,
+      color: theme.text.primary,
+    },
+    listItemCurrentTime: {
+      fontSize: 16,
+      lineHeight: 20,
+      color: theme.text.primary,
+      textAlign: 'right',
+    },
+    hourBox: {
+      width: CELL_W,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    hourBlock: {
+      width: 64,
+      height: 64,
+      paddingTop: 4,
+      borderRadius: theme.radius.lg,
+      backgroundColor: theme.surface.fieldStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: theme.text.helper,
+    },
+    hourBlock12hFormat: {
+      paddingTop: 8,
+      justifyContent: 'flex-start',
+    },
+    hourBlockHour: {
+      fontSize: 36,
+      lineHeight: 36,
+      fontWeight: '300',
+      color: theme.text.primary,
+    },
+    hourBlockDate: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 4,
+    },
+    hourBlockDateWeekday: {
+      fontSize: 16,
+      lineHeight: 18,
+      color: theme.text.primary,
+    },
+    hourBlockDateMonthDay: {
+      fontSize: 16,
+      lineHeight: 18,
+      color: theme.text.primary,
+    },
+    hourBlockAmPM: {
+      fontSize: 14,
+      lineHeight: 14,
+      color: theme.text.primary,
+      top: -3,
+    },
+    hourBlockYesterday: {
+      opacity: 0.65,
+    },
+    hourBlockTomorrow: {
+      opacity: 0.65,
+    },
+    hourBlockAfterLimit: {},
+    hourBlockOutsideFilled: {
+      borderWidth: 1,
+      borderColor: theme.text.onLight,
+      backgroundColor: theme.surface.button.primary,
+    },
+    hourBlockTextOutsideFilled: {
+      color: 'yellow',
+    },
+    notificationCountBadge: {
+      position: 'absolute',
+      bottom: -8,
+      minWidth: 18,
+      height: 15,
+      borderRadius: 8,
+      paddingHorizontal: 5,
+      flexDirection: 'row',
+      gap: 2,
+      alignSelf: 'center',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surface.button.primary,
+    },
+    notificationCountIcon: {
+      width: 9,
+      height: 9,
+    },
+    notificationCountText: {
+      fontSize: 12,
+      lineHeight: 13,
+      color: theme.text.onLight,
+    },
+    resetBar: {
+      position: 'relative',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10,
+    },
+    resetButtonPressable: {
+      position: 'absolute',
+      bottom: -10,
+      width: 20,
+      height: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    resetButton: {
+      borderRadius: theme.radius.lg,
+      width: 20,
+      height: 20,
+      backgroundColor: theme.surface.button.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    resetButtonIcon: {
+      width: 12,
+      height: 12,
+    },
+    daySelectorBar: {
+      height: 60,
+      borderTopWidth: 1,
+      borderColor: theme.border.muted,
+      paddingHorizontal: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    daySelector: {
+      width: 256,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    daySelectorButton: {
+      width: 36,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surface.button.subtle,
+    },
+    daySelectorButtonIcon: {
+      width: 7,
+      height: 12,
+    },
+    daySelectorButtonIconRight: {
+      transform: [{ rotate: '180deg'}],
+    },
+    daySelectorCenter: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+    },
+    daySelectorWeekdayText: {
+      color: theme.text.primary,
+      fontSize: 14,
+    },
+    daySelectorDateText: {
+      color: theme.text.primary,
+      fontSize: 18,
+    },
   });
 }

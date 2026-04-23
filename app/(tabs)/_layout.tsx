@@ -30,12 +30,16 @@ import IconCheckmarkFilled from '@/assets/images/icon--checkmark-1--filled.svg';
 
 import IconBack from '@/assets/images/icon--arrow-2--outlined.svg';
 
+import IconMiscMenuOutlined from '@/assets/images/icon--menu-2--outlined.svg';
+import IconMiscMenuFilled from '@/assets/images/icon--menu-2--filled.svg';
+
 import { AddCityModal, type CityRow } from '@/components/add-city-modal';
 import { DeleteCityModal } from '@/components/delete-city-modal';
 import { NotificationModal, type NotificationFormValues } from '@/components/notification-modal';
 import { MainMenuModal } from '@/components/main-menu-modal';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
+import { useNotificationsSort } from '@/contexts/notifications-sort-context';
 import { useSelectedCities } from '@/contexts/selected-cities-context';
 import IconDelete1 from '@/assets/images/icon--delete-2--outlined.svg';
 
@@ -46,6 +50,7 @@ function HeaderButtons() {
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const { isEditMode, toggleEditMode } = useEditMode();
+  const { openSortPicker, isSortPickerVisible } = useNotificationsSort();
   const { selectedCities, addCity, addNotification, removeCity } = useSelectedCities();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const [isAddCityModalVisible, setIsAddCityModalVisible] = React.useState(false);
@@ -53,11 +58,15 @@ function HeaderButtons() {
   const [selectedNotificationCityId, setSelectedNotificationCityId] = React.useState<number | null>(null);
   const [isMainMenuModalVisible, setIsMainMenuModalVisible] = React.useState(false);
   const [isDeleteCityModalVisible, setIsDeleteCityModalVisible] = React.useState(false);
-  const lastActiveTabPathRef = React.useRef<'/' | '/index' | '/timeline' | '/notifications'>('/index');
+  const lastActiveTabPathRef = React.useRef<'/' | '/timeline' | '/notifications'>('/');
   const isEditCityScreen = pathname === '/edit-city';
   const isContactScreen = pathname === '/contact';
   const isSettingsScreen = pathname === '/settings';
   const isAboutScreen = pathname === '/about';
+  const isNotificationsScreen = pathname === '/notifications';
+  const isIndexScreen = pathname === '/' || pathname === '/index';
+  const isTimelineScreen = pathname === '/timeline';
+  const isSortScreen = isIndexScreen || isTimelineScreen || isNotificationsScreen;
   const isDetailScreen = isEditCityScreen || isContactScreen || isSettingsScreen || isAboutScreen;
 
   const currentEditCityId = isEditCityScreen && globalParams.cityId ? Number(globalParams.cityId) : null;
@@ -81,7 +90,7 @@ function HeaderButtons() {
 
   React.useEffect(() => {
     if (pathname === '/' || pathname === '/index' || pathname === '/timeline' || pathname === '/notifications') {
-      lastActiveTabPathRef.current = pathname;
+      lastActiveTabPathRef.current = pathname === '/index' ? '/' : pathname;
     }
   }, [pathname]);
 
@@ -328,6 +337,30 @@ function HeaderButtons() {
                 />
               )}
             </Pressable>
+
+            {isSortScreen && (
+              <Pressable
+                onPress={openSortPicker}
+                disabled={isEditMode}
+                style={[
+                  styles.headerButton,
+                  styles.headerButtonSort,
+                  isEditMode && styles.headerButtonDisabled,
+                ]}
+              >
+                {isSortPickerVisible ? (
+                  <IconMiscMenuFilled
+                    style={styles.headerButtonIcon}
+                    fill={theme.text.primary}
+                  />
+                ) : (
+                  <IconMiscMenuOutlined
+                    style={styles.headerButtonIcon}
+                    fill={theme.text.primary}
+                  />
+                )}
+              </Pressable>
+            )}
 
             <Pressable
               onPress={handleOpenAddCityModal}
@@ -602,6 +635,17 @@ function createStyles(theme: UiTheme) {
     headerButtonSettings: {
       marginLeft: 'auto',
       marginRight: 0
+    },
+    headerButtonSort: {
+      width: 'auto',
+      minWidth: 44,
+      paddingHorizontal: 8,
+      marginHorizontal: 8,
+    },
+    headerButtonSortText: {
+      color: theme.text.primary,
+      fontSize: 15,
+      fontWeight: '600',
     },
     headerButtonDelete: {
       marginLeft: 'auto',

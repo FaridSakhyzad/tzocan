@@ -5,23 +5,30 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useIsFocused } from '@react-navigation/native';
+import { AddCityModal, type CityRow } from '@/components/add-city-modal';
 import { useSelectedCities, SelectedCity } from '@/contexts/selected-cities-context';
 import { useSettings, TimeFormat } from '@/contexts/settings-context';
 import { useEditMode } from '@/contexts/edit-mode-context';
 import { DeleteCityModal } from '@/components/delete-city-modal';
+import { CitySortPickerModal } from '@/components/city-sort-picker-modal';
 import { TimeRuler } from '@/components/time-ruler';
 import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import { CityOrderMode, useNotificationsSort } from '@/contexts/notifications-sort-context';
+import { sortCitiesByOrder } from '@/utils/city-sorting';
 
 import IconDelete1 from '@/assets/images/icon--delete-1.svg';
 import IconNotification2 from '@/assets/images/icon--notification-2.svg';
 import IconNotificationsMultiple from '@/assets/images/icon--notifications-multiple-1.svg';
+
+import IconAddCity from '@/assets/images/icon--cities--outlined.svg';
 
 const INDEX_CLOCK_REFRESH_INTERVAL_MS = 5000;
 
@@ -105,13 +112,16 @@ export default function Index() {
   const router = useRouter();
   const { theme } = useAppTheme();
   const { t, locale } = useI18n();
-  const { selectedCities, reorderCities, removeCity } = useSelectedCities();
+  const { selectedCities, reorderCities, removeCity, addCity } = useSelectedCities();
   const { timeFormat, timeOffsetMinutes, setTimeOffsetMinutes } = useSettings();
   const { isEditMode } = useEditMode();
+  const { sortState, setSortState, isSortPickerVisible, closeSortPicker } = useNotificationsSort();
   const isFocused = useIsFocused();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [, setTick] = useState(1);
   const [cityPendingDelete, setCityPendingDelete] = useState<SelectedCity | null>(null);
+  const [isAddCityModalVisible, setIsAddCityModalVisible] = useState(false);
+  const [draftCityOrder, setDraftCityOrder] = useState<CityOrderMode>(sortState.cityOrder);
   const deleteButtonsOpacity = useRef(new Animated.Value(isEditMode ? 1 : 0)).current;
   const dragHandleReveal = useRef(new Animated.Value(isEditMode ? 1 : 0)).current;
   const dragHandleTranslateX = dragHandleReveal.interpolate({
@@ -156,6 +166,17 @@ export default function Index() {
     ]).start();
   }, [deleteButtonsOpacity, dragHandleReveal, isEditMode]);
 
+  useEffect(() => {
+    if (isSortPickerVisible && isFocused) {
+      setDraftCityOrder(sortState.cityOrder);
+    }
+  }, [isFocused, isSortPickerVisible, sortState.cityOrder]);
+
+  const displayedCities = useMemo(
+    () => sortCitiesByOrder(selectedCities, sortState.cityOrder, locale),
+    [locale, selectedCities, sortState.cityOrder]
+  );
+
   const handleEditCity = (city: SelectedCity) => {
     if (!isEditMode) {
       router.replace({ pathname: '/edit-city', params: { cityId: city.id.toString() } });
@@ -179,97 +200,131 @@ export default function Index() {
     setCityPendingDelete(null);
   };
 
+  const handleOpenAddCityModal = () => {
+    setIsAddCityModalVisible(true);
+  };
+
+  const handleCloseAddCityModal = () => {
+    setIsAddCityModalVisible(false);
+  };
+
+  const handleSaveCity = (city: CityRow) => {
+    addCity(city);
+    setIsAddCityModalVisible(false);
+  };
+
+  const renderCityItem = (
+    city: SelectedCity,
+    index: number,
+    options?: { drag?: () => void; isActive?: boolean; draggable?: boolean }
+  ) => {
+    const isActive = options?.isActive;
+    const canDrag = Boolean(options?.draggable && sortState.cityOrder === 'none');
+
+    return (
+      <Pressable
+        onPress={() => handleEditCity(city)}
+        onLongPress={canDrag ? options?.drag : undefined}
+        disabled={isActive}
+        style={[
+          styles.cityItem,
+          ((1 + index) === displayedCities.length) && styles.cityItemLast,
+          isActive && styles.cityItemDragging
+        ]}
+      >
+        <View style={styles.cityRow}>
+          <Animated.View
+            pointerEvents={isEditMode && canDrag ? 'auto' : 'none'}
+            style={[
+              styles.dragHandleReveal,
+              {
+                width: dragHandleWidth,
+                opacity: dragHandleOpacity,
+                transform: [{ translateX: dragHandleTranslateX }],
+              },
+            ]}
+          >
+            <Pressable
+              onPressIn={isEditMode && canDrag ? options?.drag : undefined}
+              disabled={!isEditMode || !canDrag}
+              style={styles.dragHandle}
+            >
+              <Text style={styles.dragHandleText}>☰</Text>
+            </Pressable>
+          </Animated.View>
+
+          <View style={styles.cityInfo}>
+            <Text style={styles.cityName}>
+              {city.customName || city.name}
+            </Text>
+
+            {city.customName && (
+              <Text style={styles.cityOriginalName}>{city.name}</Text>
+            )}
+
+            <View style={styles.cityMeta}>
+              <Text style={styles.cityTimezone}>
+                {getTimezoneOffset(city.tz, t('common.same'))}
+              </Text>
+              {city.notifications && city.notifications.length > 0 && (
+                <View style={styles.cityNotifications}>
+                  {city.notifications.length === 1 && (
+                    <IconNotification2 style={styles.cityNotificationIcon} fill={theme.text.primary} />
+                  )}
+                  {city.notifications.length === 2 && (
+                    <>
+                      <IconNotification2 style={styles.cityNotificationIcon} fill={theme.text.primary} />
+                      <IconNotification2 style={styles.cityNotificationIcon} fill={theme.text.primary} />
+                    </>
+                  )}
+                  {city.notifications.length > 2 && (
+                    <>
+                      <IconNotificationsMultiple style={styles.cityMultipleNotificationsIcon} fill={theme.text.primary} /><Text style={styles.cityNotificationCount}>({city.notifications.length})</Text>
+                    </>
+                  )}
+                </View>
+              )}
+            </View>
+          </View>
+          <Text style={styles.cityTime}>
+            {getLocalTime(city.tz, locale, timeFormat, timeOffsetMinutes)}
+          </Text>
+          <Animated.View
+            pointerEvents={isEditMode ? 'auto' : 'none'}
+            style={[styles.deleteButtonBox, { opacity: deleteButtonsOpacity }]}
+          >
+            <Pressable
+              onPress={isEditMode ? () => handleOpenDeleteCityModal(city) : undefined}
+              disabled={!isEditMode}
+              style={styles.deleteButton}
+            >
+              <IconDelete1
+                style={styles.deleteButtonIcon}
+                fill={theme.surface.card}
+              />
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Pressable>
+    );
+  };
+
   const renderItem = ({ item: city, drag, isActive, getIndex }: RenderItemParams<SelectedCity>) => {
     const index = getIndex() || 0;
 
     return (
       <ScaleDecorator>
-        <Pressable
-          onPress={() => handleEditCity(city)}
-          onLongPress={isEditMode ? drag : undefined}
-          disabled={isActive}
-          style={[
-            styles.cityItem,
-            ((1 + index) === selectedCities.length) && styles.cityItemLast,
-            isActive && styles.cityItemDragging
-          ]}
-        >
-          <View style={styles.cityRow}>
-            <Animated.View
-              pointerEvents={isEditMode ? 'auto' : 'none'}
-              style={[
-                styles.dragHandleReveal,
-                {
-                  width: dragHandleWidth,
-                  opacity: dragHandleOpacity,
-                  transform: [{ translateX: dragHandleTranslateX }],
-                },
-              ]}
-            >
-              <Pressable
-                onPressIn={isEditMode ? drag : undefined}
-                disabled={!isEditMode}
-                style={styles.dragHandle}
-              >
-                <Text style={styles.dragHandleText}>☰</Text>
-              </Pressable>
-            </Animated.View>
-
-            <View style={styles.cityInfo}>
-              <Text style={styles.cityName}>
-                {city.customName || city.name}
-              </Text>
-
-              {city.customName && (
-                <Text style={styles.cityOriginalName}>{city.name}</Text>
-              )}
-
-              <View style={styles.cityMeta}>
-                <Text style={styles.cityTimezone}>
-                  {getTimezoneOffset(city.tz, t('common.same'))}
-                </Text>
-                {city.notifications && city.notifications.length > 0 && (
-                  <View style={styles.cityNotifications}>
-                    {city.notifications.length === 1 && (
-                      <IconNotification2 style={styles.cityNotificationIcon} fill={theme.text.primary} />
-                    )}
-                    {city.notifications.length === 2 && (
-                      <>
-                        <IconNotification2 style={styles.cityNotificationIcon} fill={theme.text.primary} />
-                        <IconNotification2 style={styles.cityNotificationIcon} fill={theme.text.primary} />
-                      </>
-                    )}
-                    {city.notifications.length > 2 && (
-                      <>
-                        <IconNotificationsMultiple style={styles.cityMultipleNotificationsIcon} fill={theme.text.primary} /><Text style={styles.cityNotificationCount}>({city.notifications.length})</Text>
-                      </>
-                    )}
-                  </View>
-                )}
-              </View>
-            </View>
-            <Text style={styles.cityTime}>
-              {getLocalTime(city.tz, locale, timeFormat, timeOffsetMinutes)}
-            </Text>
-            <Animated.View
-              pointerEvents={isEditMode ? 'auto' : 'none'}
-              style={[styles.deleteButtonBox, { opacity: deleteButtonsOpacity }]}
-            >
-              <Pressable
-                onPress={isEditMode ? () => handleOpenDeleteCityModal(city) : undefined}
-                disabled={!isEditMode}
-                style={styles.deleteButton}
-              >
-                <IconDelete1
-                  style={styles.deleteButtonIcon}
-                  fill={theme.surface.card}
-                />
-              </Pressable>
-            </Animated.View>
-          </View>
-        </Pressable>
+        {renderCityItem(city, index, { drag, isActive, draggable: true })}
       </ScaleDecorator>
     );
+  };
+
+  const handleApplyCitySort = () => {
+    setSortState({
+      ...sortState,
+      cityOrder: draftCityOrder,
+    });
+    closeSortPicker();
   };
 
   return (
@@ -277,21 +332,41 @@ export default function Index() {
       <View style={styles.mainView}>
         {selectedCities.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>{t('index.empty')}</Text>
-            <Text style={styles.emptyStateHint}>{t('index.emptyHint')}</Text>
+            <Pressable
+              onPress={handleOpenAddCityModal}
+              style={styles.emptyStateButton}
+            >
+              <IconAddCity style={styles.emptyStateButtonIcon} fill={theme.surface.button.primary} />
+              <Text style={styles.emptyStateButtonText}>{t('common.addCity')}</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.listContainer}>
-            <DraggableFlatList
-              style={styles.citiesList}
-              data={selectedCities}
-              onDragEnd={({data}) => reorderCities(data)}
-              keyExtractor={(item) => `city-${item.id}`}
-              renderItem={renderItem}
-              bounces={false}
-              overScrollMode="never"
-              alwaysBounceVertical={false}
-            />
+            {sortState.cityOrder === 'none' ? (
+              <DraggableFlatList
+                style={styles.citiesList}
+                data={selectedCities}
+                onDragEnd={({data}) => reorderCities(data)}
+                keyExtractor={(item) => `city-${item.id}`}
+                renderItem={renderItem}
+                bounces={false}
+                overScrollMode="never"
+                alwaysBounceVertical={false}
+              />
+            ) : (
+              <ScrollView
+                style={styles.citiesList}
+                bounces={false}
+                overScrollMode="never"
+                alwaysBounceVertical={false}
+              >
+                {displayedCities.map((city, index) => (
+                  <View key={`sorted-city-${city.id}`}>
+                    {renderCityItem(city, index)}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
           </View>
         )}
         <View
@@ -311,6 +386,20 @@ export default function Index() {
           cityName={cityPendingDelete?.customName || cityPendingDelete?.name || t('city.fallbackName')}
           onClose={handleCloseDeleteCityModal}
           onConfirm={handleConfirmDeleteCity}
+        />
+
+        <AddCityModal
+          visible={isAddCityModalVisible}
+          onClose={handleCloseAddCityModal}
+          onSave={handleSaveCity}
+        />
+
+        <CitySortPickerModal
+          visible={isFocused && isSortPickerVisible}
+          cityOrder={draftCityOrder}
+          onChangeCityOrder={setDraftCityOrder}
+          onClose={closeSortPicker}
+          onApply={handleApplyCitySort}
         />
       </View>
     </GestureHandlerRootView>
@@ -339,14 +428,17 @@ function createStyles(theme: UiTheme) {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    emptyStateText: {
-      fontSize: 18,
-      color: theme.text.muted,
+    emptyStateButton: {
+      alignItems: 'center',
     },
-    emptyStateHint: {
-      fontSize: 14,
-      color: theme.text.helper,
-      marginTop: 8,
+    emptyStateButtonIcon: {
+      width: 20,
+      height: 20,
+      marginBottom: 20,
+    },
+    emptyStateButtonText: {
+      fontSize: 16,
+      color: theme.text.primary,
     },
     cityItem: {
       paddingVertical: 16,
