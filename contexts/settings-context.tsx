@@ -36,6 +36,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+
+    saveSettings(timeFormat, firstDayOfWeek, timeOffsetMinutes, languageCode, themeName);
+  }, [firstDayOfWeek, isLoaded, languageCode, themeName, timeFormat, timeOffsetMinutes]);
+
   const loadSettings = async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -82,27 +90,22 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setTimeFormat = (format: TimeFormat) => {
     setTimeFormatState(format);
-    saveSettings(format, firstDayOfWeek, timeOffsetMinutes, languageCode, themeName);
   };
 
   const setFirstDayOfWeek = (value: FirstDayOfWeek) => {
     setFirstDayOfWeekState(value);
-    saveSettings(timeFormat, value, timeOffsetMinutes, languageCode, themeName);
   };
 
   const setTimeOffsetMinutes = (offset: number) => {
     setTimeOffsetMinutesState(offset);
-    saveSettings(timeFormat, firstDayOfWeek, offset, languageCode, themeName);
   };
 
   const setLanguageCode = (nextLanguageCode: LanguageCode) => {
     setLanguageCodeState(nextLanguageCode);
-    saveSettings(timeFormat, firstDayOfWeek, timeOffsetMinutes, nextLanguageCode, themeName);
   };
 
   const setThemeName = (nextThemeName: ThemeName) => {
     setThemeNameState(nextThemeName);
-    saveSettings(timeFormat, firstDayOfWeek, timeOffsetMinutes, languageCode, nextThemeName);
   };
 
   return (

@@ -398,6 +398,18 @@ function getNotificationCreatedAt(notification: CityNotification) {
   return Number.isFinite(fromId) ? fromId : 0;
 }
 
+function getInactiveReasonLabel(notification: CityNotification, t: (key: string) => string) {
+  if (notification.inactiveReason === 'permission') {
+    return t('notification.inactive.permission');
+  }
+
+  if (notification.inactiveReason === 'past') {
+    return t('notification.inactive.past');
+  }
+
+  return null;
+}
+
 function getTimezoneOffsetMinutes(timezone: string) {
   const now = new Date();
   const fmt = new Intl.DateTimeFormat('en-US', {
@@ -424,7 +436,7 @@ function getTimezoneOffsetMinutes(timezone: string) {
   return Math.round((cityAsUtc - now.getTime()) / 60000);
 }
 
-function getNextDirectionalMode(currentMode: 'none' | 'asc' | 'desc') {
+function getNextDirectionalMode(currentMode: 'none' | 'asc' | 'desc'): 'asc' | 'desc' {
   if (currentMode === 'none') {
     return 'asc';
   }
@@ -645,8 +657,8 @@ export default function Notifications() {
     return entries.slice().sort((a, b) => {
       if (sortState.cityOrder === 'name-asc' || sortState.cityOrder === 'name-desc') {
         const direction = sortState.cityOrder === 'name-asc' ? 1 : -1;
-        const aName = a.city.customName || a.city.name;
-        const bName = b.city.customName || b.city.name;
+        const aName = getCityDisplayName(a.city, localizedCityNames[a.city.cityId]);
+        const bName = getCityDisplayName(b.city, localizedCityNames[b.city.cityId]);
         const byName = aName.localeCompare(bName, locale, { sensitivity: 'base' });
 
         if (byName !== 0) {
@@ -670,12 +682,12 @@ export default function Notifications() {
         return byTimezone * direction;
       }
 
-      const aName = a.city.customName || a.city.name;
-      const bName = b.city.customName || b.city.name;
+      const aName = getCityDisplayName(a.city, localizedCityNames[a.city.cityId]);
+      const bName = getCityDisplayName(b.city, localizedCityNames[b.city.cityId]);
 
       return aName.localeCompare(bName, locale, { sensitivity: 'base' }) * direction;
     });
-  }, [citiesWithNotifications, locale, sortState.cityOrder, sortState.groupByCity, sortState.notificationOrder]);
+  }, [citiesWithNotifications, locale, localizedCityNames, sortState.cityOrder, sortState.groupByCity, sortState.notificationOrder]);
 
   const linearNotificationEntries = useMemo(() => {
     const baseEntries = citiesWithNotifications.flatMap((city) =>
@@ -866,10 +878,7 @@ export default function Notifications() {
 
       return {
         ...currentState,
-        notificationOrder:
-          nextDirection === 'none'
-            ? 'none'
-            : `${sortFamily}-${nextDirection}` as NotificationOrderMode,
+        notificationOrder: `${sortFamily}-${nextDirection}` as NotificationOrderMode,
       };
     });
   };
@@ -902,6 +911,7 @@ export default function Notifications() {
     const notificationRepeatLabel = getNotificationRepeatLabel(notification, firstDayOfWeek, weekdayShortLabels, t);
     const notificationLocalDayShiftLabel = getNotificationLocalDayShiftLabel(city.tz, notification, t);
     const notificationLocalMonthOrYearShiftLabel = getNotificationLocalMonthOrYearShiftLabel(city.tz, notification, t);
+    const notificationInactiveReasonLabel = getInactiveReasonLabel(notification, t);
 
     return (
       <View
@@ -932,6 +942,12 @@ export default function Notifications() {
             <Pressable onPress={() => handleOpenUrl(notification.url!)}>
               <Text style={styles.notificationUrl}>{notification.url}</Text>
             </Pressable>
+          )}
+
+          {!!notificationInactiveReasonLabel && (
+            <Text style={styles.notificationInactiveReason}>
+              {notificationInactiveReasonLabel}
+            </Text>
           )}
         </View>
 
@@ -1546,6 +1562,12 @@ function createStyles(theme: UiTheme) {
       lineHeight: 18,
       color: theme.text.warning,
       textDecorationLine: 'underline',
+    },
+    notificationInactiveReason: {
+      marginTop: 6,
+      fontSize: 13,
+      lineHeight: 16,
+      color: theme.text.helper,
     },
     notificationDateTime: {
       flexDirection: 'column',

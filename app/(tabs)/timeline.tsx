@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Pressable, ScrollView } from 'react-native';
 
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
@@ -6,15 +6,14 @@ import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-nativ
 import Animated, {
   clamp,
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
-  withDecay,
-  withTiming,
   withSpring,
 } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 
 import { AddCityModal, type CityRow } from '@/components/add-city-modal';
 import { CitySortPickerModal } from '@/components/city-sort-picker-modal';
@@ -87,10 +86,9 @@ function getCurrentTimeInTimezone(timezone: string, locale: string, timeFormat: 
 
 const CELL_W = 74;
 const DAY_HOURS = 24;
-
-const EDGE_EXTRA_HOURS = 2;
-const EDGE_RUBBER_MAX_PX = 110;
-const EDGE_SWITCH_THRESHOLD_PX = 45;
+const WINDOW_HOURS = DAY_HOURS * 3;
+const FOCUSED_DAY_START_INDEX = DAY_HOURS;
+const FOCUSED_DAY_END_INDEX = DAY_HOURS * 2 - 1;
 
 type DateParts = {
   year: number;
@@ -138,11 +136,54 @@ function isSameYmd(
   return a.year === b.year && a.month === b.month && a.day === b.day;
 }
 
-function shouldTriggerOnSelectedDay(
+function normalizeTimelineDay(date: Date) {
+  const normalized = new Date(date);
+  normalized.setHours(12, 0, 0, 0);
+  return normalized;
+}
+
+function addHours(date: Date, hours: number) {
+  const next = new Date(date);
+  next.setHours(next.getHours() + hours);
+  return next;
+}
+
+function shiftDay(date: Date, days: number) {
+  const next = normalizeTimelineDay(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getTimelineWindowStart(day: Date) {
+  const start = normalizeTimelineDay(day);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 1);
+  return start;
+}
+
+function getHourDisplay(hour: number, timeFormat: string) {
+  if (timeFormat === '12h') {
+    return {
+      hour: hour % 12 === 0 ? 12 : hour % 12,
+      suffix: hour < 12 ? 'am' : 'pm',
+    };
+  }
+
+  return {
+    hour,
+    suffix: null,
+  };
+}
+
+function getDayOffsetForCellIndex(index: number) {
+  return Math.floor(index / DAY_HOURS) - 1;
+}
+
+function shouldTriggerOnCityDate(
   notification: CityNotification,
   cityTz: string,
-  selectedYmd: { year: number; month: number; day: number },
-  selectedWeekday: number
+  slotParts: DateParts,
+  currentCityParts: DateParts
 ) {
   const repeat = notification.repeat || (notification.isDaily ? 'daily' : 'none');
 
@@ -154,59 +195,37 @@ function shouldTriggerOnSelectedDay(
     const weekdays = notification.weekdays && notification.weekdays.length > 0
       ? notification.weekdays
       : [new Date().getDay()];
-    return weekdays.includes(selectedWeekday);
+    return weekdays.includes(new Date(slotParts.year, slotParts.month - 1, slotParts.day).getDay());
   }
 
   if (repeat === 'monthly') {
-    const dayOfMonth = notification.day ?? getDatePartsInTimezone(new Date(), cityTz).day;
-    return selectedYmd.day === dayOfMonth;
+    const dayOfMonth = notification.day ?? currentCityParts.day;
+    return slotParts.day === dayOfMonth;
   }
 
   if (repeat === 'yearly') {
-    const todayInCity = getDatePartsInTimezone(new Date(), cityTz);
-    const month = notification.month ?? todayInCity.month;
-    const day = notification.day ?? todayInCity.day;
-    return selectedYmd.month === month && selectedYmd.day === day;
+    const month = notification.month ?? currentCityParts.month;
+    const day = notification.day ?? currentCityParts.day;
+    return slotParts.month === month && slotParts.day === day;
   }
 
   if (notification.year && notification.month && notification.day) {
-    return isSameYmd(selectedYmd, {
+    return isSameYmd(slotParts, {
       year: notification.year,
       month: notification.month,
       day: notification.day,
     });
   }
 
-  const nowInCity = getDatePartsInTimezone(new Date(), cityTz);
   const isTimePassed =
-    nowInCity.hour > notification.hour ||
-    (nowInCity.hour === notification.hour && nowInCity.minute >= notification.minute);
+    currentCityParts.hour > notification.hour ||
+    (currentCityParts.hour === notification.hour && currentCityParts.minute >= notification.minute);
 
   const triggerYmd = isTimePassed
-    ? addDays(nowInCity.year, nowInCity.month, nowInCity.day, 1)
-    : { year: nowInCity.year, month: nowInCity.month, day: nowInCity.day };
+    ? addDays(currentCityParts.year, currentCityParts.month, currentCityParts.day, 1)
+    : { year: currentCityParts.year, month: currentCityParts.month, day: currentCityParts.day };
 
-  return isSameYmd(selectedYmd, triggerYmd);
-}
-
-function getHourlyNotificationCounts(
-  city: SelectedCity,
-  selectedYmd: { year: number; month: number; day: number },
-  selectedWeekday: number
-): Record<number, number> {
-  const result: Record<number, number> = {};
-  const notifications = city.notifications || [];
-
-  notifications.forEach((n) => {
-    if (!n.enabled) return;
-    if (n.hour < 0 || n.hour > 23) return;
-
-    if (shouldTriggerOnSelectedDay(n, city.tz, selectedYmd, selectedWeekday)) {
-      result[n.hour] = (result[n.hour] || 0) + 1;
-    }
-  });
-
-  return result;
+  return isSameYmd(slotParts, triggerYmd);
 }
 
 interface ITimeLineProps {
@@ -215,33 +234,63 @@ interface ITimeLineProps {
   maxX: number;
   enabled: boolean;
   sidePad: number;
-  selectedDay: Date;
-  onEdgeDayShift: (direction: -1 | 1) => void;
-  rowOffsetHours: number;
-  totalHours: number;
-  dayStartIndex: number;
+  city: SelectedCity;
+  windowStartDate: Date;
   timelineWidth: number;
-  hourlyCounts: Record<number, number>;
   timeFormat: string;
   width: number;
-  locale: string;
+  onUserInteraction?: () => void;
 }
 
-function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift, rowOffsetHours, totalHours, dayStartIndex, timelineWidth, hourlyCounts, timeFormat, width, locale }: ITimeLineProps) {
+function TimelineComponent({ x, minX, maxX, enabled, sidePad, city, windowStartDate, timelineWidth, timeFormat, width, onUserInteraction }: ITimeLineProps) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const startX = useSharedValue(0);
+  const cells = useMemo(() => {
+    const notifications = city.notifications || [];
+    const notificationsByHour = new Map<number, CityNotification[]>();
+    const currentCityParts = getDatePartsInTimezone(new Date(), city.tz);
 
-  const applyRubber = (distance: number) => {
-    "worklet";
-    return (distance * EDGE_RUBBER_MAX_PX) / (distance + EDGE_RUBBER_MAX_PX);
-  };
+    notifications.forEach((notification) => {
+      if (!notification.enabled) {
+        return;
+      }
+
+      if (!notificationsByHour.has(notification.hour)) {
+        notificationsByHour.set(notification.hour, []);
+      }
+
+      notificationsByHour.get(notification.hour)?.push(notification);
+    });
+
+    return Array.from({ length: WINDOW_HOURS }, (_, index) => {
+      const slotDate = addHours(windowStartDate, index);
+      const slotParts = getDatePartsInTimezone(slotDate, city.tz);
+      const display = getHourDisplay(slotParts.hour, timeFormat);
+      const slotNotifications = notificationsByHour.get(slotParts.hour) || [];
+      let notificationCount = 0;
+
+      slotNotifications.forEach((notification) => {
+        if (shouldTriggerOnCityDate(notification, city.tz, slotParts, currentCityParts)) {
+          notificationCount += 1;
+        }
+      });
+
+      return {
+        key: `${city.id}-${slotDate.getTime()}`,
+        dayOffset: Math.floor(index / DAY_HOURS) - 1,
+        hour: display.hour,
+        suffix: display.suffix,
+        notificationCount,
+      };
+    });
+  }, [city, timeFormat, windowStartDate]);
 
   const pan = useMemo(() => {
     const snapToCellCenter = (xNow: number) => {
       "worklet";
       const i = Math.round((xNow + width / 2 - sidePad - CELL_W / 2) / CELL_W);
-      const clampedI = Math.max(0, Math.min(totalHours - 1, i));
+      const clampedI = Math.max(0, Math.min(WINDOW_HOURS - 1, i));
 
       const target = sidePad + (clampedI + 0.5) * CELL_W - width / 2;
       return clamp(target, minX, maxX);
@@ -252,56 +301,24 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
       .activeOffsetX([-12, 12])
       .failOffsetY([-12, 12])
       .onBegin(() => {
+        if (onUserInteraction) {
+          runOnJS(onUserInteraction)();
+        }
         startX.value = x.value;
       })
       .onUpdate((e) => {
-        const next = startX.value - e.translationX;
-        if (next < minX) {
-          const over = minX - next;
-          x.value = minX - applyRubber(over);
-          return;
-        }
-
-        if (next > maxX) {
-          const over = next - maxX;
-          x.value = maxX + applyRubber(over);
-          return;
-        }
-
-        x.value = next;
+        x.value = clamp(startX.value - e.translationX, minX, maxX);
       })
       .onEnd((e) => {
-        if (x.value < minX - EDGE_SWITCH_THRESHOLD_PX) {
-          x.value = withSpring(minX, { duration: 220 });
-          runOnJS(onEdgeDayShift)(-1);
-          return;
-        }
-
-        if (x.value > maxX + EDGE_SWITCH_THRESHOLD_PX) {
-          x.value = withSpring(maxX, { duration: 220 });
-          runOnJS(onEdgeDayShift)(1);
-          return;
-        }
-
-        x.value = withDecay(
-          { velocity: -e.velocityX, clamp: [minX, maxX] },
-          (finished) => {
-            if (finished) {
-              const target = snapToCellCenter(x.value);
-              x.value = withSpring(target, { duration: 180 });
-            }
-          }
-        );
+        const projected = clamp(x.value - e.velocityX * 0.12, minX, maxX);
+        const target = snapToCellCenter(projected);
+        x.value = withSpring(target, { duration: 220 });
       });
-  }, [enabled, maxX, minX, onEdgeDayShift, sidePad, startX, totalHours, width, x]);
+  }, [enabled, maxX, minX, onUserInteraction, sidePad, startX, width, x]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: -x.value - rowOffsetHours * CELL_W }],
+    transform: [{ translateX: -x.value }],
   }));
-
-  const centerBase = sidePad + CELL_W / 2 - width / 2;
-  const minCenterHourIndex = Math.ceil(rowOffsetHours + (minX - centerBase) / CELL_W - 1e-6);
-  const maxCenterHourIndex = Math.floor(rowOffsetHours + (maxX - centerBase) / CELL_W + 1e-6);
 
   return (
     <GestureDetector gesture={pan}>
@@ -309,108 +326,41 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
         <Animated.View style={[{ width: timelineWidth, flexDirection: "row" }, style]}>
           <View style={{ width: sidePad }} />
 
-          {Array.from({ length: totalHours }).map((_, i) => {
-            const absoluteHour = i - dayStartIndex;
-            const isMainDayHour = absoluteHour >= 0 && absoluteHour < DAY_HOURS;
-            const normalizedHour = ((absoluteHour % DAY_HOURS) + DAY_HOURS) % DAY_HOURS;
-            const hour = timeFormat === '12h' ? normalizedHour % 12 : normalizedHour;
-            const ampm = normalizedHour < 12 ? 'am' : 'pm';
-
-            const isYesterdayHour = absoluteHour < 0;
-            const isTomorrowHour = absoluteHour >= DAY_HOURS;
-            const isLeftOutsideScrollLimit = i < minCenterHourIndex;
-            const isRightOutsideScrollLimit = i > maxCenterHourIndex;
-            const isOutsideScrollLimits = isLeftOutsideScrollLimit || isRightOutsideScrollLimit;
-            const isFirstLeftOutside = i === minCenterHourIndex - 1;
-            const isFirstRightOutside = i === maxCenterHourIndex + 1;
-
-            const shouldFillOutsideBackground =
-              (isLeftOutsideScrollLimit && !isFirstLeftOutside) ||
-              (isRightOutsideScrollLimit && !isFirstRightOutside);
-
-            const shouldUseOutsideTextColor = shouldFillOutsideBackground;
-
-            const isMidnight = normalizedHour === 0;
-
-            const dayOffset = Math.floor(absoluteHour / DAY_HOURS);
-            const count = isMainDayHour ? (hourlyCounts[normalizedHour] || 0) : 0;
-            const dayDate = new Date(selectedDay);
-
-            dayDate.setDate(selectedDay.getDate() + dayOffset);
-
-            const dayDateWeekday = new Intl.DateTimeFormat('en-US', {
-              weekday: 'short',
-            }).format(dayDate);
-
-            const dayDateMonthDay = new Intl.DateTimeFormat('en-US', {
-              month: 'short',
-              day: 'numeric',
-            }).format(dayDate);
+          {cells.map((cell, index) => {
+            const isFocusedDay = cell.dayOffset === 0;
+            const isDayStart = index === DAY_HOURS || index === DAY_HOURS * 2;
 
             return (
               <View
-                key={i}
+                key={cell.key}
                 style={styles.hourBox}
               >
                 <View
                   style={[
                     styles.hourBlock,
                     timeFormat === '12h' && styles.hourBlock12hFormat,
-                    isYesterdayHour && styles.hourBlockYesterday,
-                    isTomorrowHour && styles.hourBlockTomorrow,
-                    isOutsideScrollLimits && styles.hourBlockAfterLimit,
-                    shouldFillOutsideBackground && styles.hourBlockOutsideFilled,
+                    !isFocusedDay && styles.hourBlockNeighborDay,
+                    isDayStart && styles.hourBlockDayStart,
                   ]}
                 >
-                  {shouldUseOutsideTextColor && (
+                  {timeFormat === '12h' ? (
                     <>
-                      {isTomorrowHour ? (
-                        <Text>Right</Text>
-                      ) : (
-                        <Text>Left</Text>
-                      )}
+                      <Text style={[styles.hourBlockHour]}>{cell.hour}</Text>
+                      <Text style={[styles.hourBlockAmPM]}>{cell.suffix}</Text>
                     </>
+                  ) : (
+                    <Text style={[styles.hourBlockHour]}>{cell.hour}</Text>
                   )}
 
-                  {isMidnight && (
-                    <View style={styles.hourBlockDate}>
-                      <Text
-                        style={[
-                          styles.hourBlockDateWeekday,
-                          shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled,
-                        ]}
-                      >
-                        {dayDateWeekday}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.hourBlockDateMonthDay,
-                          shouldUseOutsideTextColor && styles.hourBlockTextOutsideFilled,
-                        ]}
-                      >
-                        {dayDateMonthDay}
-                      </Text>
-                    </View>
-                  )}
-
-                  {!isMidnight && !shouldUseOutsideTextColor && (
-                    timeFormat === '12h' ? (
-                      <>
-                        <Text style={[styles.hourBlockHour]}>{(hour === 0 ? 12 : hour)}</Text>
-                        <Text style={[styles.hourBlockAmPM]}>{ampm}</Text>
-                      </>
-                    ) : (
-                      <Text style={[styles.hourBlockHour]}>{hour}</Text>
-                    )
-                  )}
-
-                  {count > 0 && (
+                  {cell.notificationCount > 0 && (
                     <View style={styles.notificationCountBadge}>
                       <IconNotification
                         style={styles.notificationCountIcon}
                         fill={theme.surface.button.subtleWeak}
                       />
-                      {count > 1 && (<Text style={styles.notificationCountText}>{count}</Text>)}
+                      {cell.notificationCount > 1 && (
+                        <Text style={styles.notificationCountText}>{cell.notificationCount}</Text>
+                      )}
                     </View>
                   )}
                 </View>
@@ -425,6 +375,25 @@ function Timeline({ x, minX, maxX, enabled, sidePad, selectedDay, onEdgeDayShift
   );
 }
 
+const Timeline = React.memo(
+  TimelineComponent,
+  (prevProps, nextProps) => {
+    return (
+      prevProps.x === nextProps.x &&
+      prevProps.minX === nextProps.minX &&
+      prevProps.maxX === nextProps.maxX &&
+      prevProps.enabled === nextProps.enabled &&
+      prevProps.sidePad === nextProps.sidePad &&
+      prevProps.city === nextProps.city &&
+      prevProps.windowStartDate.getTime() === nextProps.windowStartDate.getTime() &&
+      prevProps.timelineWidth === nextProps.timelineWidth &&
+      prevProps.timeFormat === nextProps.timeFormat &&
+      prevProps.width === nextProps.width &&
+      prevProps.onUserInteraction === nextProps.onUserInteraction
+    );
+  }
+);
+
 export default function TimelineScreen() {
   const { theme } = useAppTheme();
   const { locale, t } = useI18n();
@@ -433,7 +402,7 @@ export default function TimelineScreen() {
   const { isEditMode } = useEditMode();
   const { sortState, setSortState, isSortPickerVisible, closeSortPicker } = useNotificationsSort();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [, setClockTick] = useState(0);
+  const [clockTick, setClockTick] = useState(0);
   const isFocused = useIsFocused();
   const localizedCityNames = useLocalizedCityNames(selectedCities.map((city) => city.cityId));
   const [isAddCityModalVisible, setIsAddCityModalVisible] = useState(false);
@@ -463,80 +432,92 @@ export default function TimelineScreen() {
 
   const { width } = useWindowDimensions();
   const displayedCities = useMemo(
-    () => sortCitiesByOrder(selectedCities, sortState.cityOrder, locale),
-    [locale, selectedCities, sortState.cityOrder]
+    () =>
+      sortCitiesByOrder(
+        selectedCities,
+        sortState.cityOrder,
+        locale,
+        (city) => getCityDisplayName(city, localizedCityNames[city.cityId])
+      ),
+    [locale, localizedCityNames, selectedCities, sortState.cityOrder]
   );
-  const { offsetsMap, minOffset, maxOffset } = useMemo(() => {
+  const offsetsMap = useMemo(() => {
     const map = new Map<number, number>();
-    let min = 0;
-    let max = 0;
 
     displayedCities.forEach((city) => {
       const offset = getTimezoneOffsetHours(city.tz);
       map.set(city.id, offset);
-      if (offset < min) min = offset;
-      if (offset > max) max = offset;
     });
 
-    return { offsetsMap: map, minOffset: min, maxOffset: max };
+    return map;
   }, [displayedCities]);
-
-  const leftPadHours = Math.ceil(Math.max(0, -minOffset)) + EDGE_EXTRA_HOURS;
-  const rightPadHours = Math.ceil(Math.max(0, maxOffset)) + EDGE_EXTRA_HOURS;
-  const totalHours = DAY_HOURS + leftPadHours + rightPadHours;
   const sidePad = Math.max(0, width / 2 - CELL_W / 2);
-  const timelineWidth = totalHours * CELL_W + sidePad * 2;
-  const maxX = Math.max(0, timelineWidth - width);
-
-  // Safety bounds: prevent empty gaps for any timezone-shifted row.
-  const safeMinScrollX = Math.max(0, -minOffset * CELL_W);
-  const safeMaxScrollX = Math.min(maxX, timelineWidth - width - maxOffset * CELL_W);
-
-  // UX bounds: allow centering only local-day hours [00..23].
-  const firstLocalHourIndex = leftPadHours;
-  const lastLocalHourIndex = leftPadHours + (DAY_HOURS - 1);
-  const dayMinScrollX = sidePad + (firstLocalHourIndex + 0.5) * CELL_W - width / 2;
-  const dayMaxScrollX = sidePad + (lastLocalHourIndex + 0.5) * CELL_W - width / 2;
-
-  const rawMinScrollX = Math.max(safeMinScrollX, dayMinScrollX);
-  const rawMaxScrollX = Math.min(safeMaxScrollX, dayMaxScrollX);
-  const minScrollX = rawMinScrollX <= rawMaxScrollX ? rawMinScrollX : safeMinScrollX;
-  const maxScrollX = rawMinScrollX <= rawMaxScrollX ? rawMaxScrollX : safeMaxScrollX;
+  const timelineWidth = WINDOW_HOURS * CELL_W + sidePad * 2;
+  const maxScrollX = Math.max(0, timelineWidth - width);
+  const minScrollX = 0;
 
   const [dragging, setDragging] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(() => {
-    const now = new Date();
-    now.setHours(12, 0, 0, 0);
-    return now;
-  });
-  const dayTransitionOpacity = useSharedValue(1);
+  const initialCenterHourIndex = FOCUSED_DAY_START_INDEX + new Date().getHours();
+  const [windowDay, setWindowDay] = useState(() => normalizeTimelineDay(new Date()));
+  const [focusedDayOffset, setFocusedDayOffset] = useState<-1 | 0 | 1>(0);
+  const [pendingShiftDirection, setPendingShiftDirection] = useState<-1 | 0 | 1>(0);
+  const windowStartDate = useMemo(() => getTimelineWindowStart(windowDay), [windowDay]);
+  const hasUserAdjustedTimelineRef = useRef(false);
 
-  const initialScrollValue = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
+  const getCenterXForHourIndex = useCallback((hourIndex: number) => {
+    return sidePad + (hourIndex + 0.5) * CELL_W - width / 2;
+  }, [sidePad, width]);
+
+  const initialScrollValue = getCenterXForHourIndex(initialCenterHourIndex);
 
   const x = useSharedValue(initialScrollValue);
+  const isDayShiftInFlight = useSharedValue(false);
 
   useEffect(() => {
     x.value = clamp(x.value, minScrollX, maxScrollX);
   }, [maxScrollX, minScrollX, x]);
 
-  useFocusEffect(
-    useCallback(() => {
-      const target = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
-      x.value = withTiming(clamp(target, minScrollX, maxScrollX), { duration: 220 });
-    }, [leftPadHours, maxScrollX, minScrollX, sidePad, width, x])
-  );
+  useEffect(() => {
+    if (!isFocused || hasUserAdjustedTimelineRef.current) {
+      return;
+    }
+
+    const today = normalizeTimelineDay(new Date());
+    const currentHourIndex = FOCUSED_DAY_START_INDEX + new Date().getHours();
+
+    if (focusedDayOffset !== 0) {
+      return;
+    }
+
+    if (today.getTime() !== windowDay.getTime()) {
+      setWindowDay(today);
+      setFocusedDayOffset(0);
+    }
+
+    x.value = withSpring(
+      clamp(getCenterXForHourIndex(currentHourIndex), minScrollX, maxScrollX),
+      { duration: 220 }
+    );
+  }, [
+    clockTick,
+    focusedDayOffset,
+    getCenterXForHourIndex,
+    isFocused,
+    maxScrollX,
+    minScrollX,
+    windowDay,
+    x,
+  ]);
 
   const resetToLocalHour = useCallback(() => {
-    const target = sidePad + (leftPadHours + new Date().getHours() + 0.5) * CELL_W - width / 2;
+    const today = normalizeTimelineDay(new Date());
+    const nextCenterHourIndex = FOCUSED_DAY_START_INDEX + new Date().getHours();
+    const target = getCenterXForHourIndex(nextCenterHourIndex);
+    hasUserAdjustedTimelineRef.current = false;
+    setWindowDay(today);
+    setFocusedDayOffset(0);
     x.value = withSpring(clamp(target, minScrollX, maxScrollX), { duration: 220 });
-  }, [leftPadHours, maxScrollX, minScrollX, sidePad, width, x]);
-
-  const selectedYmd = useMemo(() => ({
-    year: selectedDay.getFullYear(),
-    month: selectedDay.getMonth() + 1,
-    day: selectedDay.getDate(),
-  }), [selectedDay]);
-  const selectedWeekday = selectedDay.getDay();
+  }, [getCenterXForHourIndex, maxScrollX, minScrollX, x]);
 
   const handleOpenAddCityModal = useCallback(() => {
     setIsAddCityModalVisible(true);
@@ -568,54 +549,132 @@ export default function TimelineScreen() {
     setCityPendingDelete(null);
   }, [cityPendingDelete, removeCity]);
 
-  const shiftSelectedDay = useCallback((days: number) => {
-    setSelectedDay((prev) => {
-      const next = new Date(prev);
-      next.setDate(prev.getDate() + days);
-      return next;
-    });
+  const shiftFocusedTimelineDay = useCallback((days: number) => {
+    hasUserAdjustedTimelineRef.current = true;
+    setWindowDay((prev) => shiftDay(prev, days));
+    setFocusedDayOffset(0);
   }, []);
 
-  const handleEdgeDayShift = useCallback((direction: -1 | 1) => {
-    shiftSelectedDay(direction);
-  }, [shiftSelectedDay]);
-
   const resetSelectedDayToToday = useCallback(() => {
-    const now = new Date();
-    now.setHours(12, 0, 0, 0);
-    setSelectedDay(now);
+    resetToLocalHour();
+  }, [resetToLocalHour]);
+
+  const shiftTimelineWindow = useCallback((direction: -1 | 1) => {
+    setWindowDay((prev) => shiftDay(prev, direction));
+  }, []);
+
+  const beginWindowShift = useCallback((direction: -1 | 1) => {
+    setPendingShiftDirection(direction);
+  }, []);
+
+  const handleTimelineInteraction = useCallback(() => {
+    hasUserAdjustedTimelineRef.current = true;
+  }, []);
+
+  const updateFocusedDayOffset = useCallback((nextFocusedDayOffset: -1 | 0 | 1) => {
+    setFocusedDayOffset((prev) => (prev === nextFocusedDayOffset ? prev : nextFocusedDayOffset));
+  }, []);
+
+  const noopAfterRebase = useCallback(() => {
+    setFocusedDayOffset(0);
   }, []);
 
   useEffect(() => {
-    dayTransitionOpacity.value = withTiming(0, { duration: 200 }, (finished) => {
-      if (finished) {
-        dayTransitionOpacity.value = withTiming(1, { duration: 200 });
-      }
-    });
-  }, [dayTransitionOpacity, selectedDay]);
+    isDayShiftInFlight.value = false;
+  }, [isDayShiftInFlight, windowDay]);
 
-  const dayTransitionStyle = useAnimatedStyle(() => ({
-    opacity: dayTransitionOpacity.value,
-  }));
+  useEffect(() => {
+    if (pendingShiftDirection === 0) {
+      return;
+    }
+
+    let frameOne = 0;
+    let frameTwo = 0;
+
+    frameOne = requestAnimationFrame(() => {
+      frameTwo = requestAnimationFrame(() => {
+        setPendingShiftDirection(0);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(frameOne);
+      cancelAnimationFrame(frameTwo);
+    };
+  }, [pendingShiftDirection, windowDay]);
+
+  useAnimatedReaction(
+    () => {
+      const nextCenterHourIndex = Math.round((x.value + width / 2 - sidePad - CELL_W / 2) / CELL_W);
+      const nextFocusedDayOffset: -1 | 0 | 1 =
+        nextCenterHourIndex < FOCUSED_DAY_START_INDEX
+          ? -1
+          : nextCenterHourIndex > FOCUSED_DAY_END_INDEX
+            ? 1
+            : 0;
+
+      return {
+        centerHourIndex: nextCenterHourIndex,
+        focusedDayOffset: nextFocusedDayOffset,
+        shiftLocked: isDayShiftInFlight.value,
+      };
+    },
+    ({ centerHourIndex, focusedDayOffset: nextFocusedDayOffset, shiftLocked }) => {
+      if (shiftLocked) {
+        return;
+      }
+
+      if (centerHourIndex < FOCUSED_DAY_START_INDEX) {
+        isDayShiftInFlight.value = true;
+        x.value += DAY_HOURS * CELL_W;
+        runOnJS(beginWindowShift)(-1);
+        runOnJS(noopAfterRebase)();
+        runOnJS(shiftTimelineWindow)(-1);
+        return;
+      }
+
+      if (centerHourIndex > FOCUSED_DAY_END_INDEX) {
+        isDayShiftInFlight.value = true;
+        x.value -= DAY_HOURS * CELL_W;
+        runOnJS(beginWindowShift)(1);
+        runOnJS(noopAfterRebase)();
+        runOnJS(shiftTimelineWindow)(1);
+        return;
+      }
+
+      runOnJS(updateFocusedDayOffset)(nextFocusedDayOffset);
+    },
+    [isDayShiftInFlight, noopAfterRebase, shiftTimelineWindow, sidePad, updateFocusedDayOffset, width, x]
+  );
+
+  const focusedDay = useMemo(
+    () => shiftDay(windowDay, focusedDayOffset),
+    [focusedDayOffset, windowDay]
+  );
+
+  const skeletonDayOffset = pendingShiftDirection === 1
+    ? 1
+    : pendingShiftDirection === -1
+      ? -1
+      : null;
 
   const selectedDayMonthDay = useMemo(() => {
     const parts = new Intl.DateTimeFormat(locale, {
       month: 'long',
       day: 'numeric',
-    }).formatToParts(selectedDay);
+    }).formatToParts(focusedDay);
 
     const month = parts.find((p) => p.type === 'month')?.value ?? '';
     const day = parts.find((p) => p.type === 'day')?.value ?? '';
 
     return `${month}, ${day}`;
-  }, [locale, selectedDay]);
+  }, [focusedDay, locale]);
 
   const renderCityRow = (
     city: SelectedCity,
     options?: { drag?: () => void; isActive?: boolean; draggable?: boolean }
   ) => {
     const timezoneOffset = offsetsMap.get(city.id) || 0;
-    const hourlyCounts = getHourlyNotificationCounts(city, selectedYmd, selectedWeekday);
     const canDrag = Boolean(options?.draggable && sortState.cityOrder === 'none');
 
     let timeZoneLabel;
@@ -666,23 +725,44 @@ export default function TimelineScreen() {
           )}
         </View>
 
-        <Timeline
-          x={x}
-          minX={minScrollX}
-          maxX={maxScrollX}
-          enabled={!dragging && !isEditMode}
-          sidePad={sidePad}
-          selectedDay={selectedDay}
-          onEdgeDayShift={handleEdgeDayShift}
-          rowOffsetHours={timezoneOffset}
-          totalHours={totalHours}
-          dayStartIndex={leftPadHours}
+        <View style={styles.timelineRowContainer}>
+          <Timeline
+            x={x}
+            minX={minScrollX}
+            maxX={maxScrollX}
+            enabled={!dragging && !isEditMode}
+            sidePad={sidePad}
+          city={city}
+          windowStartDate={windowStartDate}
           timelineWidth={timelineWidth}
-          hourlyCounts={hourlyCounts}
           timeFormat={timeFormat}
           width={width}
-          locale={locale}
+          onUserInteraction={handleTimelineInteraction}
         />
+          {skeletonDayOffset !== null && (
+            <View pointerEvents="none" style={styles.timelineSkeletonOverlay}>
+              <View style={{ width: sidePad }} />
+              {Array.from({ length: WINDOW_HOURS }, (_, index) => {
+                const dayOffset = getDayOffsetForCellIndex(index);
+                const shouldShowSkeleton = dayOffset === skeletonDayOffset;
+
+                return (
+                  <View key={`timeline-skeleton-${city.id}-${index}`} style={styles.hourBox}>
+                    <View
+                      style={[
+                        styles.hourBlock,
+                        timeFormat === '12h' && styles.hourBlock12hFormat,
+                        styles.hourBlockSkeletonBase,
+                        !shouldShowSkeleton && styles.hourBlockSkeletonHidden,
+                      ]}
+                    />
+                  </View>
+                );
+              })}
+              <View style={{ width: sidePad }} />
+            </View>
+          )}
+        </View>
       </Pressable>
     )
   };
@@ -734,7 +814,7 @@ export default function TimelineScreen() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <Animated.View style={[styles.listFadeContainer, dayTransitionStyle]}>
+      <View style={styles.listContentContainer}>
         <View style={{
           ...styles.middleMarker,
           left: width / 2 - CELL_W / 2
@@ -762,7 +842,7 @@ export default function TimelineScreen() {
             ))}
           </ScrollView>
         )}
-      </Animated.View>
+      </View>
       <View style={styles.resetBar} pointerEvents="box-none">
         <Pressable style={styles.resetButtonPressable} onPress={resetToLocalHour}>
           <View style={styles.resetButton}>
@@ -775,7 +855,7 @@ export default function TimelineScreen() {
       </View>
       <View style={styles.daySelectorBar}>
         <View style={styles.daySelector}>
-          <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(-1)}>
+          <Pressable style={styles.daySelectorButton} onPress={() => shiftFocusedTimelineDay(-1)}>
             <Arrow1
               style={[styles.daySelectorButtonIcon, styles.daySelectorButtonIconRight]}
               fill={theme.text.primary}
@@ -783,7 +863,7 @@ export default function TimelineScreen() {
           </Pressable>
           <Pressable style={styles.daySelectorCenter} onPress={resetSelectedDayToToday}>
             <Text style={styles.daySelectorWeekdayText}>
-              {selectedDay.toLocaleDateString(locale, {
+              {focusedDay.toLocaleDateString(locale, {
                 weekday: 'long',
               })}
             </Text>
@@ -791,7 +871,7 @@ export default function TimelineScreen() {
               {selectedDayMonthDay}
             </Text>
           </Pressable>
-          <Pressable style={styles.daySelectorButton} onPress={() => shiftSelectedDay(1)}>
+          <Pressable style={styles.daySelectorButton} onPress={() => shiftFocusedTimelineDay(1)}>
             <Arrow1
               style={[styles.daySelectorButtonIcon]}
               fill={theme.text.primary}
@@ -848,7 +928,7 @@ function createStyles(theme: UiTheme) {
     container: {
       flex: 1,
     },
-    listFadeContainer: {
+    listContentContainer: {
       flex: 1,
       overflow: 'hidden',
     },
@@ -868,6 +948,18 @@ function createStyles(theme: UiTheme) {
     timelineViewport: {
       overflow: 'hidden',
       paddingBottom: 11
+    },
+    timelineRowContainer: {
+      position: 'relative',
+    },
+    timelineSkeletonOverlay: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 11,
+      flexDirection: 'row',
+      alignItems: 'center',
     },
     listItem: {
       paddingTop: 11,
@@ -940,25 +1032,24 @@ function createStyles(theme: UiTheme) {
       paddingTop: 8,
       justifyContent: 'flex-start',
     },
+    hourBlockNeighborDay: {
+      opacity: 0.58,
+    },
+    hourBlockDayStart: {
+      borderWidth: 1,
+      borderColor: theme.border.subtle,
+    },
+    hourBlockSkeletonBase: {
+      backgroundColor: theme.surface.elevatedSoft,
+      opacity: 0.85,
+    },
+    hourBlockSkeletonHidden: {
+      opacity: 0,
+    },
     hourBlockHour: {
       fontSize: 36,
       lineHeight: 36,
       fontWeight: '300',
-      color: theme.text.primary,
-    },
-    hourBlockDate: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 4,
-    },
-    hourBlockDateWeekday: {
-      fontSize: 16,
-      lineHeight: 18,
-      color: theme.text.primary,
-    },
-    hourBlockDateMonthDay: {
-      fontSize: 16,
-      lineHeight: 18,
       color: theme.text.primary,
     },
     hourBlockAmPM: {
@@ -966,21 +1057,6 @@ function createStyles(theme: UiTheme) {
       lineHeight: 14,
       color: theme.text.primary,
       top: -3,
-    },
-    hourBlockYesterday: {
-      opacity: 0.65,
-    },
-    hourBlockTomorrow: {
-      opacity: 0.65,
-    },
-    hourBlockAfterLimit: {},
-    hourBlockOutsideFilled: {
-      borderWidth: 1,
-      borderColor: theme.text.onLight,
-      backgroundColor: theme.surface.button.primary,
-    },
-    hourBlockTextOutsideFilled: {
-      color: 'yellow',
     },
     notificationCountBadge: {
       position: 'absolute',

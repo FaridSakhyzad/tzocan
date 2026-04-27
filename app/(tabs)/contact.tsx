@@ -80,9 +80,7 @@ export default function ContactScreen() {
         }
 
         await Linking.openURL(mailtoUrl);
-        setWasSubmitted(true);
-        setEmail('');
-        setMessage('');
+        setWasSubmitted(false);
       }
     } catch {
       setSubmitError(t('contact.failed'));

@@ -5,7 +5,7 @@ import { CityOrderMode } from '@/contexts/notifications-sort-context';
 import { useI18n } from '@/hooks/use-i18n';
 import type { UiTheme } from '@/constants/ui-theme.types';
 
-function getNextDirectionalMode(currentMode: 'none' | 'asc' | 'desc') {
+function getNextDirectionalMode(currentMode: 'none' | 'asc' | 'desc'): 'asc' | 'desc' {
   if (currentMode === 'none') {
     return 'asc';
   }
@@ -66,9 +66,7 @@ export function CitySortPickerModal({
       : getCityOrderDirection(cityOrder.startsWith('timezone') ? cityOrder : 'none');
     const nextDirection = getNextDirectionalMode(currentDirection);
 
-    onChangeCityOrder(
-      nextDirection === 'none' ? 'none' : `${sortFamily}-${nextDirection}` as CityOrderMode
-    );
+    onChangeCityOrder(`${sortFamily}-${nextDirection}` as CityOrderMode);
   };
 
   return (

@@ -1,6 +1,8 @@
 import { SelectedCity } from '@/contexts/selected-cities-context';
 import { CityOrderMode } from '@/contexts/notifications-sort-context';
 
+type GetCitySortLabel = (city: SelectedCity) => string;
+
 function getTimezoneOffsetMinutes(timezone: string) {
   const now = new Date();
   const fmt = new Intl.DateTimeFormat('en-US', {
@@ -27,7 +29,12 @@ function getTimezoneOffsetMinutes(timezone: string) {
   return Math.round((cityAsUtc - now.getTime()) / 60000);
 }
 
-export function sortCitiesByOrder(cities: SelectedCity[], cityOrder: CityOrderMode, locale: string) {
+export function sortCitiesByOrder(
+  cities: SelectedCity[],
+  cityOrder: CityOrderMode,
+  locale: string,
+  getCitySortLabel: GetCitySortLabel = (city) => city.customName || city.name
+) {
   if (cityOrder === 'none') {
     return cities;
   }
@@ -35,8 +42,8 @@ export function sortCitiesByOrder(cities: SelectedCity[], cityOrder: CityOrderMo
   return cities.slice().sort((a, b) => {
     if (cityOrder === 'name-asc' || cityOrder === 'name-desc') {
       const direction = cityOrder === 'name-asc' ? 1 : -1;
-      const aName = a.customName || a.name;
-      const bName = b.customName || b.name;
+      const aName = getCitySortLabel(a);
+      const bName = getCitySortLabel(b);
       const byName = aName.localeCompare(bName, locale, { sensitivity: 'base' });
 
       if (byName !== 0) {
@@ -60,8 +67,8 @@ export function sortCitiesByOrder(cities: SelectedCity[], cityOrder: CityOrderMo
       return byTimezone * direction;
     }
 
-    const aName = a.customName || a.name;
-    const bName = b.customName || b.name;
+    const aName = getCitySortLabel(a);
+    const bName = getCitySortLabel(b);
 
     return aName.localeCompare(bName, locale, { sensitivity: 'base' }) * direction;
   });

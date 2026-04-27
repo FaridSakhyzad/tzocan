@@ -96,7 +96,7 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const { t, languageCode } = useI18n();
-  const { db } = useDatabase();
+  const { db, error: dbError, isLoading: isDatabaseLoading } = useDatabase();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [query, setQuery] = useState('');
   const [cities, setCities] = useState<SearchCityRow[]>([]);
@@ -207,7 +207,10 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                   placeholder={t('addCity.searchPlaceholder')}
                   placeholderTextColor={theme.text.placeholder}
                   value={query}
-                  onChangeText={setQuery}
+                  onChangeText={(value) => {
+                    setQuery(value);
+                    setSelectedCity(null);
+                  }}
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoFocus
@@ -217,6 +220,12 @@ export function AddCityModal({ visible, onClose, onSave }: AddCityModalProps) {
                   <View style={styles.loadingBlock}>
                     <LoadingSpinner />
                   </View>
+                )}
+
+                {!isLoading && !isDatabaseLoading && !!dbError && (
+                  <Text style={styles.helperText}>
+                    {t('addCity.databaseUnavailable')}
+                  </Text>
                 )}
 
                 {!isLoading && cities.length > 0 && (
@@ -310,6 +319,12 @@ function createStyles(theme: UiTheme) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    helperText: {
+      marginHorizontal: theme.spacing.screenX,
+      marginBottom: 12,
+      color: theme.text.helper,
+      textAlign: 'center',
     },
     resultsList: {
       flex: 1,

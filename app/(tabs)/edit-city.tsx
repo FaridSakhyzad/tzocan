@@ -138,6 +138,26 @@ function getNotificationDateLabel(notification: CityNotification, locale: string
   return null;
 }
 
+function formatScheduledTime(hour: number, minute: number, timeFormat: TimeFormat, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: timeFormat === '12h',
+  }).format(new Date(2027, 0, 1, hour, minute));
+}
+
+function getInactiveReasonLabel(notification: CityNotification, t: (key: string) => string) {
+  if (notification.inactiveReason === 'permission') {
+    return t('notification.inactive.permission');
+  }
+
+  if (notification.inactiveReason === 'past') {
+    return t('notification.inactive.past');
+  }
+
+  return null;
+}
+
 function getDatePartsInTimezone(date: Date, timezone: string) {
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
@@ -647,6 +667,7 @@ export default function EditCity() {
                 const notificationRepeatLabel = getNotificationRepeatLabel(notification, firstDayOfWeek, weekdayShortLabels, t);
                 const notificationLocalDayShiftLabel = getNotificationLocalDayShiftLabel(city.tz, notification, t);
                 const notificationLocalMonthOrYearShiftLabel = getNotificationLocalMonthOrYearShiftLabel(city.tz, notification, t);
+                const notificationInactiveReasonLabel = getInactiveReasonLabel(notification, t);
 
                 return (
                   <View
@@ -669,6 +690,9 @@ export default function EditCity() {
                       {!!notification.url && (
                         <Text style={styles.notificationUrl}>{notification.url}</Text>
                       )}
+                      {!!notificationInactiveReasonLabel && (
+                        <Text style={styles.notificationInactiveReason}>{notificationInactiveReasonLabel}</Text>
+                      )}
                     </View>
 
                     <View style={styles.notificationDateTime}>
@@ -679,7 +703,7 @@ export default function EditCity() {
                             fill={theme.text.primary}
                           />
                           <Text style={styles.notificationCityTimeText}>
-                            {notification.hour.toString().padStart(2, '0')}:{notification.minute.toString().padStart(2, '0')}
+                            {formatScheduledTime(notification.hour, notification.minute, timeFormat, locale)}
                           </Text>
                         </View>
 
@@ -949,6 +973,12 @@ function createStyles(theme: UiTheme) {
     fontSize: 15,
     lineHeight: 18,
     color: theme.text.warning,
+  },
+  notificationInactiveReason: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 16,
+    color: theme.text.helper,
   },
   notificationDateTime: {
     flexDirection: 'column',

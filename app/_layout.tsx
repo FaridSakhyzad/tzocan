@@ -21,6 +21,10 @@ export const unstable_settings = {
 };
 
 const setDefaultFont = () => {
+  if ((globalThis as { __tzcDefaultFontPatched?: boolean }).__tzcDefaultFontPatched) {
+    return;
+  }
+
   const oldTextRender = (Text as any).render;
 
   (Text as any).render = function (...args: any[]) {
@@ -47,6 +51,8 @@ const setDefaultFont = () => {
       },
     };
   };
+
+  (globalThis as { __tzcDefaultFontPatched?: boolean }).__tzcDefaultFontPatched = true;
 };
 
 function AppShell() {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { useIsFocused } from '@react-navigation/native';
 
 import { DetailScreenShell, useDetailScreenStyles } from '@/components/detail-screen-shell';
 import { useI18n } from '@/hooks/use-i18n';
@@ -13,6 +14,7 @@ export default function SettingsScreen() {
   const { themeName } = useAppTheme();
   const { t, languageCode, setLanguageCode, languageLabels } = useI18n();
   const { timeFormat, setTimeFormat, firstDayOfWeek, setFirstDayOfWeek, setThemeName } = useSettings();
+  const isFocused = useIsFocused();
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [permissionCanAskAgain, setPermissionCanAskAgain] = useState(true);
   const [isPermissionLoading, setIsPermissionLoading] = useState(false);
@@ -24,8 +26,12 @@ export default function SettingsScreen() {
   };
 
   useEffect(() => {
+    if (!isFocused) {
+      return;
+    }
+
     refreshNotificationPermission();
-  }, []);
+  }, [isFocused]);
 
   const handleEnableNotifications = async () => {
     setIsPermissionLoading(true);

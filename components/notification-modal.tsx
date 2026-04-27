@@ -135,6 +135,14 @@ export function NotificationModal({
     return baseLabel;
   }, [locale]);
 
+  const formatTimeLabel = useCallback((hour: number, minute: number) => {
+    return new Intl.DateTimeFormat(locale, {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: timeFormat === '12h',
+    }).format(new Date(2027, 0, 1, hour, minute));
+  }, [locale, timeFormat]);
+
   const getTriggerDateForTimezone = (
     timezone: string,
     year: number,
@@ -291,8 +299,8 @@ export function NotificationModal({
 
     setHasDate(hasDateInSource);
     setActivePicker(null);
-    setNotificationLabel(source?.label || source?.notes || '');
-    setNotificationNotes(source?.label ? (source.notes || '') : '');
+    setNotificationLabel(source?.label || '');
+    setNotificationNotes(source?.notes || '');
     setNotificationUrl(source?.url || '');
     const initialPickerTime = new Date(time);
     if (!source) {
@@ -354,7 +362,7 @@ export function NotificationModal({
     }
   };
 
-  const selectedTimeLabel = `${notificationTime.getHours().toString().padStart(2, '0')}:${notificationTime.getMinutes().toString().padStart(2, '0')}`;
+  const selectedTimeLabel = formatTimeLabel(notificationTime.getHours(), notificationTime.getMinutes());
   const selectedDateLabel = formatDateLabel(notificationDate);
 
   const selectedCityOption = cityOptions?.find((city) => city.id === selectedCityId) || null;
@@ -657,7 +665,7 @@ export function NotificationModal({
                         <IconClock style={styles.actionButtonHintIcon} fill={theme.text.primary} />
                         <Text style={styles.actionButtonText}>{selectedTimeLabel}</Text>
                       </View>
-                      {selectedCityOption && (
+                      {effectiveTimezone && (
                         <View style={styles.localTimeBox}>
                           <Text style={styles.localTimeLabel}>{t('common.yourTime')}</Text>
                           <Text style={styles.localTime}>{localPreviewInfo.localTimeText}</Text>

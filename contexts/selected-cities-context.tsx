@@ -420,7 +420,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
     const currentCities = selectedCitiesRef.current;
     let didChange = false;
 
-    const nextCities = await Promise.all(currentCities.map(async (city) => {
+    const nextCities: SelectedCity[] = await Promise.all(currentCities.map(async (city) => {
       if (!city.notifications || city.notifications.length === 0) {
         return city;
       }
@@ -449,7 +449,7 @@ export function SelectedCitiesProvider({ children }: { children: ReactNode }) {
         );
 
         if (!notificationIds || notificationIds.length === 0) {
-          const nextInactiveReason = isPastExplicitOneTimeNotification(
+          const nextInactiveReason: CityNotification['inactiveReason'] = isPastExplicitOneTimeNotification(
             city,
             notification.hour,
             notification.minute,

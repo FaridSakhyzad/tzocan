@@ -1,4 +1,4 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DetailScreenShell, useDetailScreenStyles } from '@/components/detail-screen-shell';
 import { useI18n } from '@/hooks/use-i18n';
@@ -14,12 +14,27 @@ export default function AboutScreen() {
 
   const { t } = useI18n();
 
+  const openExternalLink = async (url: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+
+      if (!canOpen) {
+        Alert.alert(t('common.openLinkError'));
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(t('common.openLinkError'));
+    }
+  };
+
   const handleOpenTerms = async () => {
-    await Linking.openURL('https://faridsakhizad.github.io/tzc-terms-of-use/');
+    await openExternalLink('https://faridsakhizad.github.io/tzc-terms-of-use/');
   };
 
   const handleOpenPrivacy = async () => {
-    await Linking.openURL('https://faridsakhizad.github.io/tzc-privacy-policy/');
+    await openExternalLink('https://faridsakhizad.github.io/tzc-privacy-policy/');
   };
 
   return (

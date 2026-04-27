@@ -176,8 +176,14 @@ export default function Index() {
   }, [isFocused, isSortPickerVisible, sortState.cityOrder]);
 
   const displayedCities = useMemo(
-    () => sortCitiesByOrder(selectedCities, sortState.cityOrder, locale),
-    [locale, selectedCities, sortState.cityOrder]
+    () =>
+      sortCitiesByOrder(
+        selectedCities,
+        sortState.cityOrder,
+        locale,
+        (city) => getCityDisplayName(city, localizedCityNames[city.cityId])
+      ),
+    [locale, localizedCityNames, selectedCities, sortState.cityOrder]
   );
 
   const handleEditCity = (city: SelectedCity) => {

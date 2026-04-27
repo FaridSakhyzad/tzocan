@@ -1,4 +1,12 @@
-import { Pressable, PressableProps, StyleSheet, Text, TextInput, TextInputProps } from 'react-native';
+import {
+  Pressable,
+  PressableProps,
+  PressableStateCallbackType,
+  StyleSheet,
+  Text,
+  TextInput,
+  TextInputProps,
+} from 'react-native';
 
 import { useDetailScreenStyles } from '@/components/detail-screen-shell';
 import { LoadingSpinner } from '@/components/loading-spinner';
@@ -50,10 +58,10 @@ export function DetailPrimaryButton({
     <Pressable
       {...props}
       disabled={disabled}
-      style={[
+      style={(state: PressableStateCallbackType) => [
         detailScreenStyles.primaryButton,
         disabled && detailScreenStyles.primaryButtonDisabled,
-        style,
+        typeof style === 'function' ? style(state) : style,
       ]}
     >
       {loading ? (
