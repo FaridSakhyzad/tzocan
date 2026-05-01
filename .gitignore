@@ -46,3 +46,5 @@ app-example
 /.expo/
 /.vscode/
 /.idea/
+
+.watchman-cookie-MBP--Farid-M2.*
