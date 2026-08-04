@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, Text, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useIsFocused } from '@react-navigation/native';
 
 import { DetailScreenShell, useDetailScreenStyles } from '@/components/detail-screen-shell';
+import { SUPPORT_FEATURE_ENABLED } from '@/constants/app-config';
 import { useI18n } from '@/hooks/use-i18n';
+import { useSupportModal } from '@/contexts/support-modal-context';
 import { useSettings } from '@/contexts/settings-context';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import { ThemeName } from '@/constants/ui-theme';
@@ -18,6 +20,12 @@ export default function Settings() {
   const { themeName } = useAppTheme();
   const { t, languageCode, setLanguageCode, languageLabels } = useI18n();
   const { timeFormat, setTimeFormat, firstDayOfWeek, setFirstDayOfWeek, setThemeName } = useSettings();
+  const {
+    isSupportPurchasesLoading,
+    isRestoringSupportPurchases,
+    isSupportUnavailable,
+    restoreSupportPurchases,
+  } = useSupportModal();
   const isFocused = useIsFocused();
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [permissionCanAskAgain, setPermissionCanAskAgain] = useState(true);
@@ -25,6 +33,12 @@ export default function Settings() {
   const [calendarPermissionGranted, setCalendarPermissionGranted] = useState<boolean | null>(null);
   const [calendarPermissionCanAskAgain, setCalendarPermissionCanAskAgain] = useState(true);
   const [isCalendarPermissionLoading, setIsCalendarPermissionLoading] = useState(false);
+  const [restoreMessageKey, setRestoreMessageKey] = useState<
+    | 'settings.supportRestore.ready'
+    | 'settings.supportRestore.success'
+    | 'settings.supportRestore.empty'
+    | 'settings.supportRestore.unavailable'
+  >('settings.supportRestore.ready');
 
   const refreshNotificationPermission = async () => {
     const permission = await Notifications.getPermissionsAsync();
@@ -72,6 +86,28 @@ export default function Settings() {
       setCalendarPermissionCanAskAgain(permission.canAskAgain);
     } finally {
       setIsCalendarPermissionLoading(false);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    if (isSupportUnavailable) {
+      setRestoreMessageKey('settings.supportRestore.unavailable');
+      Alert.alert(t('settings.supportRestore.title'), t('settings.supportRestore.unavailable'));
+      return;
+    }
+
+    try {
+      const restoredProductIds = await restoreSupportPurchases();
+      const nextMessageKey = restoredProductIds.length > 0
+        ? 'settings.supportRestore.success'
+        : 'settings.supportRestore.empty';
+
+      setRestoreMessageKey(nextMessageKey);
+      Alert.alert(t('settings.supportRestore.title'), t(nextMessageKey));
+    } catch (error) {
+      console.warn('Failed to restore support purchases', error);
+      setRestoreMessageKey('settings.supportRestore.unavailable');
+      Alert.alert(t('settings.supportRestore.title'), t('settings.supportRestore.unavailable'));
     }
   };
 
@@ -234,6 +270,29 @@ export default function Settings() {
           })}
         </View>
       </View>
+
+      {SUPPORT_FEATURE_ENABLED && (
+        <View style={[detailScreenStyles.card, detailScreenStyles.cardWithGap]}>
+          <View style={detailScreenStyles.settingInfoNoMargin}>
+            <Text style={detailScreenStyles.settingLabel}>{t('settings.supportRestore.title')}</Text>
+            <Text style={detailScreenStyles.settingHint}>
+              {t(restoreMessageKey)}
+            </Text>
+          </View>
+
+          <Pressable
+            style={detailScreenStyles.optionButton}
+            onPress={handleRestorePurchases}
+            disabled={isSupportPurchasesLoading || isRestoringSupportPurchases}
+          >
+            <Text style={[detailScreenStyles.optionButtonText, detailScreenStyles.notificationsOptionButtonText]}>
+              {isSupportPurchasesLoading || isRestoringSupportPurchases
+                ? t('common.loading')
+                : t('settings.supportRestore.button')}
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
       <View style={[detailScreenStyles.card, detailScreenStyles.cardWithGap]}>
         <View style={detailScreenStyles.settingInfoNoMargin}>

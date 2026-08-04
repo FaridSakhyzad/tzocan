@@ -8,6 +8,10 @@ type SupportModalContextValue = {
   closeSupportModal: () => void;
   hasPurchasedAnySupportProduct: boolean;
   canPurchaseAnySupportProduct: boolean;
+  isSupportPurchasesLoading: boolean;
+  isRestoringSupportPurchases: boolean;
+  isSupportUnavailable: boolean;
+  restoreSupportPurchases: () => Promise<string[]>;
 };
 
 const SupportModalContext = createContext<SupportModalContextValue | null>(null);
@@ -18,10 +22,12 @@ export function SupportModalProvider({ children }: { children: ReactNode }) {
     debugInfo,
     hasPurchasedAnySupportProduct,
     isLoading,
+    isRestoring,
     isUnavailable,
     supportProducts,
     canPurchaseAnySupportProduct,
     purchaseProduct,
+    restorePurchases,
   } = useSupportPurchases();
 
   const value = useMemo<SupportModalContextValue>(() => ({
@@ -33,7 +39,18 @@ export function SupportModalProvider({ children }: { children: ReactNode }) {
     },
     hasPurchasedAnySupportProduct,
     canPurchaseAnySupportProduct,
-  }), [canPurchaseAnySupportProduct, hasPurchasedAnySupportProduct]);
+    isSupportPurchasesLoading: isLoading,
+    isRestoringSupportPurchases: isRestoring,
+    isSupportUnavailable: isUnavailable,
+    restoreSupportPurchases: restorePurchases,
+  }), [
+    canPurchaseAnySupportProduct,
+    hasPurchasedAnySupportProduct,
+    isLoading,
+    isRestoring,
+    isUnavailable,
+    restorePurchases,
+  ]);
 
   return (
     <SupportModalContext.Provider value={value}>

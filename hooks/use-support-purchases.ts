@@ -47,6 +47,7 @@ export function useSupportPurchases() {
   const [productsById, setProductsById] = useState<Partial<Record<SupportProductId, Product>>>({});
   const [purchasedProductIds, setPurchasedProductIds] = useState<SupportProductId[]>([]);
   const [purchasingProductId, setPurchasingProductId] = useState<SupportProductId | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUnavailable, setIsUnavailable] = useState(false);
   const [debugInfo, setDebugInfo] = useState<SupportPurchasesDebugInfo>({
@@ -268,13 +269,35 @@ export function useSupportPurchases() {
     }
   }, [purchasedProductIds, purchasingProductId]);
 
+  const restorePurchases = useCallback(async () => {
+    if (isRestoring) {
+      return [] as SupportProductId[];
+    }
+
+    setIsRestoring(true);
+
+    try {
+      const availablePurchases = await getAvailablePurchases();
+      const restoredPurchasedProductIds = availablePurchases
+        .map((purchase) => purchase.productId)
+        .filter(isSupportProductId);
+
+      mergePurchasedProductIds(restoredPurchasedProductIds);
+      return restoredPurchasedProductIds;
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [isRestoring, mergePurchasedProductIds]);
+
   return {
     debugInfo,
     hasPurchasedAnySupportProduct,
     isLoading,
+    isRestoring,
     isUnavailable,
     supportProducts,
     canPurchaseAnySupportProduct,
     purchaseProduct,
+    restorePurchases,
   };
 }
