@@ -91,14 +91,14 @@ export function createStyles(theme: UiTheme) {
       backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
     midnightWeekday: {
-      fontSize: 16,
-      lineHeight: 18,
+      fontSize: 15,
+      lineHeight: 17,
       color: theme.text.primary,
       textTransform: 'capitalize',
     },
     midnightMonthDay: {
-      fontSize: 16,
-      lineHeight: 18,
+      fontSize: 15,
+      lineHeight: 17,
       color: theme.text.primary,
       textTransform: 'capitalize',
     },

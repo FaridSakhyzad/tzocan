@@ -16,7 +16,7 @@ type MainMenuLauncherProps = {
 export default function MainMenuLauncher({ visible, onClose }: MainMenuLauncherProps) {
   const router = useRouter();
   const { isEditMode } = useEditMode();
-  const { openSupportModal } = useSupportModal();
+  const { openSupportModal, canPurchaseAnySupportProduct } = useSupportModal();
   const [shouldForceUnmountMainMenu, setShouldForceUnmountMainMenu] = React.useState(false);
 
   React.useEffect(() => {
@@ -40,7 +40,7 @@ export default function MainMenuLauncher({ visible, onClose }: MainMenuLauncherP
   });
 
   const handleOpenSupportModal = () => {
-    if (isEditMode || !SUPPORT_FEATURE_ENABLED) {
+    if (isEditMode || !SUPPORT_FEATURE_ENABLED || !canPurchaseAnySupportProduct) {
       return;
     }
 
@@ -90,6 +90,7 @@ export default function MainMenuLauncher({ visible, onClose }: MainMenuLauncherP
           onSettings={handleOpenSettingsScreen}
           onAbout={handleOpenAboutScreen}
           canAddNotification={canAddReminder}
+          canShowSupport={canPurchaseAnySupportProduct}
         />
       )}
     </>

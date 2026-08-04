@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { SUPPORT_FEATURE_ENABLED } from '@/constants/app-config';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import { useSupportModal } from '@/contexts/support-modal-context';
 import { useI18n } from '@/hooks/use-i18n';
 
 import HeartIcon from '@/assets/images/icon--heart-1.svg';
@@ -15,9 +16,10 @@ type SupportCtaButtonProps = {
 export function SupportCtaButton({ onPress }: SupportCtaButtonProps) {
   const { theme } = useAppTheme();
   const { t } = useI18n();
+  const { hasPurchasedAnySupportProduct } = useSupportModal();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  if (!SUPPORT_FEATURE_ENABLED) {
+  if (!SUPPORT_FEATURE_ENABLED || hasPurchasedAnySupportProduct) {
     return null;
   }
 

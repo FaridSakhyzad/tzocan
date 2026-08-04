@@ -28,6 +28,7 @@ type MainMenuModalProps = {
   onSettings: () => void;
   onAbout: () => void;
   canAddNotification?: boolean;
+  canShowSupport?: boolean;
 };
 
 export function MainMenuModal({
@@ -40,6 +41,7 @@ export function MainMenuModal({
   onSettings,
   onAbout,
   canAddNotification = true,
+  canShowSupport = true,
 }: MainMenuModalProps) {
   const { theme } = useAppTheme();
   const { t } = useI18n();
@@ -123,6 +125,19 @@ export function MainMenuModal({
                     <Text style={styles.menuButtonText}>{t('common.addCity')}</Text>
                   </Pressable>
 
+                  {SUPPORT_FEATURE_ENABLED && canShowSupport && (
+                    <>
+                      <View style={styles.menuSeparator} />
+
+                      <Pressable style={styles.menuButton} onPress={handleOpenSupport}>
+                        <View style={styles.menuButtonInline}>
+                          <HeartIcon fill={theme.text.primary} style={styles.menuButtonHeartIcon} />
+                          <Text style={styles.menuButtonText}>{t('common.sayThanks')}</Text>
+                        </View>
+                      </Pressable>
+                    </>
+                  )}
+
                   <View style={styles.menuSeparator} />
 
                   <Pressable style={styles.menuButton} onPress={handleOpenSettings}>
@@ -137,18 +152,6 @@ export function MainMenuModal({
                     <Text style={styles.menuButtonText}>{t('common.about')}</Text>
                   </Pressable>
 
-                  {SUPPORT_FEATURE_ENABLED && (
-                    <>
-                      <View style={styles.menuSeparator} />
-
-                      <Pressable style={styles.menuButton} onPress={handleOpenSupport}>
-                        <View style={styles.menuButtonInline}>
-                          <HeartIcon fill={theme.text.primary} style={styles.menuButtonHeartIcon} />
-                          <Text style={styles.menuButtonText}>{t('common.sayThanks')}</Text>
-                        </View>
-                      </Pressable>
-                    </>
-                  )}
                 </View>
               </View>
             </ImageBackground>

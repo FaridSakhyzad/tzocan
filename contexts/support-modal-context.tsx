@@ -6,6 +6,8 @@ import { useSupportPurchases } from '@/hooks/use-support-purchases';
 type SupportModalContextValue = {
   openSupportModal: () => void;
   closeSupportModal: () => void;
+  hasPurchasedAnySupportProduct: boolean;
+  canPurchaseAnySupportProduct: boolean;
 };
 
 const SupportModalContext = createContext<SupportModalContextValue | null>(null);
@@ -14,9 +16,11 @@ export function SupportModalProvider({ children }: { children: ReactNode }) {
   const [isSupportModalVisible, setIsSupportModalVisible] = useState(false);
   const {
     debugInfo,
+    hasPurchasedAnySupportProduct,
     isLoading,
     isUnavailable,
     supportProducts,
+    canPurchaseAnySupportProduct,
     purchaseProduct,
   } = useSupportPurchases();
 
@@ -27,7 +31,9 @@ export function SupportModalProvider({ children }: { children: ReactNode }) {
     closeSupportModal: () => {
       setIsSupportModalVisible(false);
     },
-  }), []);
+    hasPurchasedAnySupportProduct,
+    canPurchaseAnySupportProduct,
+  }), [canPurchaseAnySupportProduct, hasPurchasedAnySupportProduct]);
 
   return (
     <SupportModalContext.Provider value={value}>

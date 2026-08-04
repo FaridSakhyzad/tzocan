@@ -114,12 +114,14 @@ export function createStyles(theme: UiTheme) {
       lineHeight: 16,
       color: theme.text.primary,
       textTransform: 'capitalize',
+      textAlign: "center",
     },
     midnightMonthDay: {
       fontSize: 14,
       lineHeight: 16,
       color: theme.text.primary,
       textTransform: 'capitalize',
+      textAlign: "center",
     },
   });
 }

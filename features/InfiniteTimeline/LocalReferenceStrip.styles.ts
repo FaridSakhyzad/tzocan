@@ -110,14 +110,14 @@ export function createStyles(theme: UiTheme) {
     },
     hourBlockMidnight: {},
     midnightWeekday: {
-      fontSize: 14,
-      lineHeight: 16,
+      fontSize: 13,
+      lineHeight: 15,
       color: theme.text.primary,
       textTransform: 'capitalize',
     },
     midnightMonthDay: {
-      fontSize: 14,
-      lineHeight: 16,
+      fontSize: 13,
+      lineHeight: 15,
       color: theme.text.primary,
       textTransform: 'capitalize',
     },

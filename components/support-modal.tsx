@@ -5,7 +5,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,12 +12,14 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SUPPORT_IAP_DEBUG_ENABLED } from '@/constants/app-config';
 import IconCancelOutlined from '@/assets/images/icon--x-3--outlined.svg';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { SUPPORT_PRODUCT_CONFIGS, SupportProductId } from '@/constants/support-products';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import { useI18n } from '@/hooks/use-i18n';
 import { useModalVisibilityAnimation } from '@/hooks/use-modal-visibility-animation';
+import { SupportIapDebug } from '@/components/support-iap-debug';
 
 import HeartIcon from '@/assets/images/icon--heart-2--outlined.svg';
 import CoffeeIcon from '@/assets/images/icon--coffee-1--outlined.svg';
@@ -218,30 +219,10 @@ export function SupportModal({
                     </View>
                   )}
 
-                  <View style={styles.debugBox}>
-                    <Text style={styles.debugTitle}>IAP Debug</Text>
-                    <ScrollView
-                      style={styles.debugScroll}
-                      contentContainerStyle={styles.debugScrollContent}
-                    >
-                      <Text style={styles.debugMetaText}>
-                        bundleIdentifier: {debugInfo.bundleIdentifier}
-                      </Text>
+                  {SUPPORT_IAP_DEBUG_ENABLED && (
+                    <SupportIapDebug debugInfo={debugInfo} />
+                  )}
 
-                      <Text style={styles.debugSectionTitle}>request</Text>
-                      <Text style={styles.debugText}>{debugInfo.requestPayload}</Text>
-
-                      {debugInfo.lastError ? (
-                        <>
-                          <Text style={styles.debugSectionTitle}>error</Text>
-                          <Text style={styles.debugErrorText}>{debugInfo.lastError}</Text>
-                        </>
-                      ) : null}
-
-                      <Text style={styles.debugSectionTitle}>response</Text>
-                      <Text style={styles.debugText}>{debugInfo.fetchProductsResponse}</Text>
-                    </ScrollView>
-                  </View>
                 </View>
 
                 <View style={styles.pad} />
@@ -317,11 +298,12 @@ function createStyles(theme: UiTheme) {
     },
     productButton: {
       minHeight: 50,
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       alignItems: 'center',
-      flexDirection: 'row',
-      paddingVertical: 10,
+      flexDirection: 'column',
+      paddingVertical: 5,
       paddingHorizontal: 15,
+      gap: 5,
       borderRadius: 25,
       backgroundColor: theme.surface.button.subtle,
     },
@@ -331,38 +313,38 @@ function createStyles(theme: UiTheme) {
     productButtonClose: {
       justifyContent: 'center',
     },
-    productButtonFuture: {
-      paddingLeft: 20,
-      justifyContent: 'flex-start',
-    },
+    productButtonFuture: {},
     productButtonIcon: {
       width: 30,
       height: 30,
-      marginRight: 5,
+      position: 'absolute',
+      top: 10,
+      bottom: 5,
+      left: 10,
     },
     productButtonWithIcon: {
-      paddingLeft: 10,
+      paddingInline: 45,
     },
     productButtonDisabled: {
       // opacity: 0.5,
     },
     productButtonText: {
       textAlign: 'center',
-      margin: 'auto',
       fontSize: 15,
+      lineHeight: 15,
       color: theme.text.primary,
+      width: '100%',
     },
     productButtonTextFuture: {
       marginLeft: 0,
-      textAlign: 'left',
     },
     productButtonPriceBox: {
-      width: 30,
-      alignItems: 'flex-end',
+      width: '100%',
+      alignItems: 'center',
     },
     productButtonPrice: {
-      width: 40,
       fontSize: 15,
+      lineHeight: 15,
       fontWeight: 'bold',
       color: theme.text.primary,
     },

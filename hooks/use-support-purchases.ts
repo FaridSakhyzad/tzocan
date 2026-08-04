@@ -13,6 +13,7 @@ import {
   requestPurchase,
 } from 'expo-iap';
 
+import { SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED } from '@/constants/app-config';
 import { SUPPORT_PRODUCT_CONFIGS, SUPPORT_PRODUCT_IDS, type SupportProductId } from '@/constants/support-products';
 
 const PURCHASED_SUPPORT_PRODUCTS_STORAGE_KEY = '@timecross_purchased_support_products';
@@ -39,6 +40,10 @@ function isSupportProductId(value: string): value is SupportProductId {
 }
 
 export function useSupportPurchases() {
+  const hasDevFallbackProducts =
+    __DEV__ &&
+    SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED &&
+    SUPPORT_PRODUCT_CONFIGS.length > 0;
   const [productsById, setProductsById] = useState<Partial<Record<SupportProductId, Product>>>({});
   const [purchasedProductIds, setPurchasedProductIds] = useState<SupportProductId[]>([]);
   const [purchasingProductId, setPurchasingProductId] = useState<SupportProductId | null>(null);
@@ -162,7 +167,7 @@ export function useSupportPurchases() {
 
         setProductsById(nextProductsById);
         mergePurchasedProductIds(restoredPurchasedProductIds);
-        setIsUnavailable(Object.keys(nextProductsById).length === 0);
+        setIsUnavailable(Object.keys(nextProductsById).length === 0 && !hasDevFallbackProducts);
       } catch (error) {
         console.warn('Failed to initialize support purchases', error);
 
@@ -176,7 +181,7 @@ export function useSupportPurchases() {
             fetchProductsResponse: 'No response',
             lastError: error instanceof Error ? error.message : String(error),
           });
-          setIsUnavailable(true);
+          setIsUnavailable(!hasDevFallbackProducts);
           setPurchasingProductId(null);
         }
       } finally {
@@ -196,7 +201,7 @@ export function useSupportPurchases() {
         console.warn('Failed to close support purchase connection', error);
       });
     };
-  }, [mergePurchasedProductIds]);
+  }, [hasDevFallbackProducts, mergePurchasedProductIds]);
 
   const supportProducts = useMemo<SupportProductRow[]>(() => {
     const nextProducts: SupportProductRow[] = [];
@@ -211,7 +216,12 @@ export function useSupportPurchases() {
         id: productConfig.id,
         label: productConfig.label,
         tier: productConfig.tier,
-        price: isPurchased || !product ? null : product.displayPrice,
+        price: isPurchased
+          ? null
+          : product?.displayPrice ??
+            (__DEV__ && SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED
+              ? productConfig.devFallbackPrice
+              : null),
         isPurchased,
         isPurchasing,
         isDisabled,
@@ -220,6 +230,16 @@ export function useSupportPurchases() {
 
     return nextProducts;
   }, [isUnavailable, productsById, purchasedProductIds, purchasingProductId]);
+
+  const hasPurchasedAnySupportProduct = useMemo(
+    () => purchasedProductIds.length > 0,
+    [purchasedProductIds]
+  );
+
+  const canPurchaseAnySupportProduct = useMemo(
+    () => supportProducts.some((product) => !product.isPurchased),
+    [supportProducts]
+  );
 
   const purchaseProduct = useCallback(async (productId: SupportProductId) => {
     const isPurchased = purchasedProductIds.includes(productId);
@@ -250,9 +270,11 @@ export function useSupportPurchases() {
 
   return {
     debugInfo,
+    hasPurchasedAnySupportProduct,
     isLoading,
     isUnavailable,
     supportProducts,
+    canPurchaseAnySupportProduct,
     purchaseProduct,
   };
 }

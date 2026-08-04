@@ -2,7 +2,7 @@
   "expo": {
     "name": "TimeCross",
     "slug": "timecross",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "timecross",
@@ -24,7 +24,7 @@
       "package": "com.faridsakhizad.timecross",
       "name": "TimeCross – World Clock",
       "slug": "timecross",
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     "web": {
       "output": "static",
