@@ -3,37 +3,37 @@ export const SUPPORT_PRODUCT_CONFIGS = [
     id: 'com.faridsakhizad.timecross.support3.v0',
     label: 'Love and Support',
     tier: 'standard',
-    devFallbackPrice: '$2.99',
+    devFallbackPrice: '$1.23',
   },
   {
     id: 'com.faridsakhizad.timecross.support5.v0',
     label: 'Love, Support, and Coffee',
     tier: 'standard',
-    devFallbackPrice: '$4.99',
+    devFallbackPrice: '$4.56',
   },
   {
     id: 'com.faridsakhizad.timecross.support10.v0',
     label: 'Legendary Support',
     tier: 'standard',
-    devFallbackPrice: '$9.99',
+    devFallbackPrice: '$7.89',
   },
   {
     id: 'com.faridsakhizad.timecross.support25.v0',
     label: 'Sponsor Future Development',
     tier: 'future',
-    devFallbackPrice: '$24.99',
+    devFallbackPrice: '$10.11',
   },
   {
     id: 'com.faridsakhizad.timecross.support50.v0',
     label: 'Major Support',
     tier: 'future',
-    devFallbackPrice: '$49.99',
+    devFallbackPrice: '$12.13',
   },
   {
     id: 'com.faridsakhizad.timecross.support100.v0',
     label: 'Visionary Support',
     tier: 'future',
-    devFallbackPrice: '$99.99',
+    devFallbackPrice: '$14.15',
   },
 ] as const;
 

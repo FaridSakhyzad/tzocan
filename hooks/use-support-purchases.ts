@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import {
   Product,
   endConnection,
@@ -42,6 +43,7 @@ function isSupportProductId(value: string): value is SupportProductId {
 export function useSupportPurchases() {
   const hasDevFallbackProducts =
     __DEV__ &&
+    Platform.OS !== 'android' &&
     SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED &&
     SUPPORT_PRODUCT_CONFIGS.length > 0;
   const [productsById, setProductsById] = useState<Partial<Record<SupportProductId, Product>>>({});
@@ -173,6 +175,7 @@ export function useSupportPurchases() {
         console.warn('Failed to initialize support purchases', error);
 
         if (isMounted) {
+          setProductsById({});
           setDebugInfo({
             bundleIdentifier: Constants.expoConfig?.ios?.bundleIdentifier ?? 'unknown',
             requestPayload: JSON.stringify({
@@ -220,7 +223,7 @@ export function useSupportPurchases() {
         price: isPurchased
           ? null
           : product?.displayPrice ??
-            (__DEV__ && SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED
+            (__DEV__ && Platform.OS !== 'android' && SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED
               ? productConfig.devFallbackPrice
               : null),
         isPurchased,
@@ -289,6 +292,17 @@ export function useSupportPurchases() {
     }
   }, [isRestoring, mergePurchasedProductIds]);
 
+  const resetLocalPurchaseState = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem(PURCHASED_SUPPORT_PRODUCTS_STORAGE_KEY);
+    } catch (error) {
+      console.warn('Failed to clear local support purchase state', error);
+    }
+
+    setPurchasedProductIds([]);
+    setPurchasingProductId(null);
+  }, []);
+
   return {
     debugInfo,
     hasPurchasedAnySupportProduct,
@@ -299,5 +313,6 @@ export function useSupportPurchases() {
     canPurchaseAnySupportProduct,
     purchaseProduct,
     restorePurchases,
+    resetLocalPurchaseState,
   };
 }

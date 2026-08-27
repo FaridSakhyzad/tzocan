@@ -1,5 +1,6 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
+import { Platform } from 'react-native';
 
 import { SUPPORT_FEATURE_ENABLED } from '@/constants/app-config';
 import { MainMenuModal } from '@/components/main-menu-modal';
@@ -40,7 +41,12 @@ export default function MainMenuLauncher({ visible, onClose }: MainMenuLauncherP
   });
 
   const handleOpenSupportModal = () => {
-    if (isEditMode || !SUPPORT_FEATURE_ENABLED || !canPurchaseAnySupportProduct) {
+    if (
+      Platform.OS === 'android' ||
+      isEditMode ||
+      !SUPPORT_FEATURE_ENABLED ||
+      !canPurchaseAnySupportProduct
+    ) {
       return;
     }
 
@@ -90,7 +96,7 @@ export default function MainMenuLauncher({ visible, onClose }: MainMenuLauncherP
           onSettings={handleOpenSettingsScreen}
           onAbout={handleOpenAboutScreen}
           canAddNotification={canAddReminder}
-          canShowSupport={canPurchaseAnySupportProduct}
+          canShowSupport={Platform.OS !== 'android' && canPurchaseAnySupportProduct}
         />
       )}
     </>

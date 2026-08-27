@@ -10,6 +10,7 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		2236BD2214D9234CB97C0B09 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC8E10EE86D5CC7D048E19 /* ExpoModulesProvider.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
+		41BE75AB3039739C00905B2E /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 41BE75AA3039739C00905B2E /* StoreKit.framework */; };
 		9996862244740118F55DA17E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB3166104320344C2DAAF5D1 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		D827F83EA83C39EC94A66DF2 /* libPods-TimeCross.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7523B453D71B60D33502CE5E /* libPods-TimeCross.a */; };
@@ -21,6 +22,7 @@
 		13B07F961A680F5B00A75B9A /* TimeCross.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TimeCross.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = TimeCross/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = TimeCross/Info.plist; sourceTree = "<group>"; };
+		41BE75AA3039739C00905B2E /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		7523B453D71B60D33502CE5E /* libPods-TimeCross.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-TimeCross.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		802C9146016DECEF6BCAABCA /* Pods-TimeCross.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TimeCross.release.xcconfig"; path = "Target Support Files/Pods-TimeCross/Pods-TimeCross.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = TimeCross/SplashScreen.storyboard; sourceTree = "<group>"; };
@@ -38,6 +40,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D827F83EA83C39EC94A66DF2 /* libPods-TimeCross.a in Frameworks */,
+				41BE75AB3039739C00905B2E /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -69,6 +72,7 @@
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				41BE75AA3039739C00905B2E /* StoreKit.framework */,
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				7523B453D71B60D33502CE5E /* libPods-TimeCross.a */,
 			);
@@ -355,7 +359,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = TimeCross/TimeCross.entitlements;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = P38J9B3X79;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -398,7 +402,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = TimeCross/TimeCross.entitlements;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = P38J9B3X79;
 				INFOPLIST_FILE = TimeCross/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "TimeCross – World Clock";

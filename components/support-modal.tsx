@@ -2,6 +2,7 @@ import {
   Animated,
   ImageBackground,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -12,7 +13,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SUPPORT_IAP_DEBUG_ENABLED } from '@/constants/app-config';
+import { STRIPE_SUPPORT_URL, SUPPORT_IAP_DEBUG_ENABLED } from '@/constants/app-config';
 import IconCancelOutlined from '@/assets/images/icon--x-3--outlined.svg';
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { SUPPORT_PRODUCT_CONFIGS, SupportProductId } from '@/constants/support-products';
@@ -75,6 +76,16 @@ export function SupportModal({
   const standardProducts = products.filter((product) => product.tier === 'standard');
   const futureProducts = products.filter((product) => product.tier === 'future');
   const visibleProducts = isShowingFutureDevelopment ? futureProducts : standardProducts;
+  const shouldShowAndroidExternalSupport = Platform.OS === 'android' && isUnavailable;
+
+  const handleOpenExternalSupport = async () => {
+    try {
+      await Linking.openURL(STRIPE_SUPPORT_URL);
+      onClose();
+    } catch (error) {
+      console.warn('Failed to open external support link', error);
+    }
+  };
 
   if (!isMounted) {
     return null;
@@ -135,14 +146,27 @@ export function SupportModal({
 
                   {!isLoading && isUnavailable && (
                     <View style={styles.productButtonBox}>
-                      <Text style={styles.stateText}>{t('support.unavailable')}</Text>
+                      {!shouldShowAndroidExternalSupport && (
+                        <Text style={styles.stateText}>{t('support.unavailable')}</Text>
+                      )}
 
-                      <Pressable
-                        style={[styles.productButton, styles.productButtonClose]}
-                        onPress={onClose}
-                      >
-                        <Text style={styles.productButtonText}>{t('common.close')}</Text>
-                      </Pressable>
+                      {shouldShowAndroidExternalSupport && (
+                        <Pressable
+                          style={styles.productButton}
+                          onPress={handleOpenExternalSupport}
+                        >
+                          <Text style={styles.productButtonText}>{t('common.support')}</Text>
+                        </Pressable>
+                      )}
+
+                      {!shouldShowAndroidExternalSupport && (
+                        <Pressable
+                          style={[styles.productButton, styles.productButtonClose]}
+                          onPress={onClose}
+                        >
+                          <Text style={styles.productButtonText}>{t('common.close')}</Text>
+                        </Pressable>
+                      )}
                     </View>
                   )}
 

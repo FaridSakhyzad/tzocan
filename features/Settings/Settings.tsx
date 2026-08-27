@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useIsFocused } from '@react-navigation/native';
 
@@ -25,6 +25,7 @@ export default function Settings() {
     isRestoringSupportPurchases,
     isSupportUnavailable,
     restoreSupportPurchases,
+    resetSupportLocalState,
   } = useSupportModal();
   const isFocused = useIsFocused();
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
@@ -33,12 +34,17 @@ export default function Settings() {
   const [calendarPermissionGranted, setCalendarPermissionGranted] = useState<boolean | null>(null);
   const [calendarPermissionCanAskAgain, setCalendarPermissionCanAskAgain] = useState(true);
   const [isCalendarPermissionLoading, setIsCalendarPermissionLoading] = useState(false);
+  const [isResettingSupportState, setIsResettingSupportState] = useState(false);
   const [restoreMessageKey, setRestoreMessageKey] = useState<
     | 'settings.supportRestore.ready'
     | 'settings.supportRestore.success'
     | 'settings.supportRestore.empty'
     | 'settings.supportRestore.unavailable'
   >('settings.supportRestore.ready');
+  const [resetMessageKey, setResetMessageKey] = useState<
+    | 'settings.supportReset.ready'
+    | 'settings.supportReset.success'
+  >('settings.supportReset.ready');
 
   const refreshNotificationPermission = async () => {
     const permission = await Notifications.getPermissionsAsync();
@@ -108,6 +114,20 @@ export default function Settings() {
       console.warn('Failed to restore support purchases', error);
       setRestoreMessageKey('settings.supportRestore.unavailable');
       Alert.alert(t('settings.supportRestore.title'), t('settings.supportRestore.unavailable'));
+    }
+  };
+
+  const handleResetSupportState = async () => {
+    setIsResettingSupportState(true);
+
+    try {
+      await resetSupportLocalState();
+      setResetMessageKey('settings.supportReset.success');
+      Alert.alert(t('settings.supportReset.title'), t('settings.supportReset.success'));
+    } catch (error) {
+      console.warn('Failed to reset local support state', error);
+    } finally {
+      setIsResettingSupportState(false);
     }
   };
 
@@ -271,7 +291,7 @@ export default function Settings() {
         </View>
       </View>
 
-      {SUPPORT_FEATURE_ENABLED && (
+      {SUPPORT_FEATURE_ENABLED && Platform.OS !== 'android' && (
         <View style={[detailScreenStyles.card, detailScreenStyles.cardWithGap]}>
           <View style={detailScreenStyles.settingInfoNoMargin}>
             <Text style={detailScreenStyles.settingLabel}>{t('settings.supportRestore.title')}</Text>
@@ -291,6 +311,28 @@ export default function Settings() {
                 : t('settings.supportRestore.button')}
             </Text>
           </Pressable>
+
+          {__DEV__ && (
+            <>
+              <View style={detailScreenStyles.settingInfoNoMargin}>
+                <Text style={detailScreenStyles.settingHint}>
+                  {t(resetMessageKey)}
+                </Text>
+              </View>
+
+              <Pressable
+                style={detailScreenStyles.optionButton}
+                onPress={handleResetSupportState}
+                disabled={isResettingSupportState}
+              >
+                <Text style={[detailScreenStyles.optionButtonText, detailScreenStyles.notificationsOptionButtonText]}>
+                  {isResettingSupportState
+                    ? t('common.loading')
+                    : t('settings.supportReset.button')}
+                </Text>
+              </Pressable>
+            </>
+          )}
         </View>
       )}
 

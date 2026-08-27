@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { useMemo } from 'react';
 
 import { SUPPORT_FEATURE_ENABLED } from '@/constants/app-config';
@@ -16,10 +16,15 @@ type SupportCtaButtonProps = {
 export function SupportCtaButton({ onPress }: SupportCtaButtonProps) {
   const { theme } = useAppTheme();
   const { t } = useI18n();
-  const { hasPurchasedAnySupportProduct } = useSupportModal();
+  const { hasPurchasedAnySupportProduct, hasAcknowledgedSupportOutsideStore } = useSupportModal();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  if (!SUPPORT_FEATURE_ENABLED || hasPurchasedAnySupportProduct) {
+  if (
+    Platform.OS === 'android' ||
+    !SUPPORT_FEATURE_ENABLED ||
+    hasPurchasedAnySupportProduct ||
+    hasAcknowledgedSupportOutsideStore
+  ) {
     return null;
   }
 

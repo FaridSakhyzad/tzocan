@@ -1,5 +1,5 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useMemo } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
 
 import type { UiTheme } from '@/constants/ui-theme.types';
 import { useAppTheme } from '@/contexts/app-theme-context';
@@ -16,31 +16,41 @@ type SupportIapDebugProps = {
 export function SupportIapDebug({ debugInfo }: SupportIapDebugProps) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <View style={styles.debugBox}>
-      <Text style={styles.debugTitle}>IAP Debug</Text>
-      <ScrollView
-        style={styles.debugScroll}
-        contentContainerStyle={styles.debugScrollContent}
+      <Pressable
+        style={styles.debugHeader}
+        onPress={() => setIsExpanded((current) => !current)}
       >
-        <Text style={styles.debugMetaText}>
-          bundleIdentifier: {debugInfo.bundleIdentifier}
-        </Text>
+        <Text style={styles.debugTitle}>IAP Debug</Text>
+        <Text style={styles.debugToggleText}>{isExpanded ? 'Hide' : 'Show'}</Text>
+      </Pressable>
 
-        <Text style={styles.debugSectionTitle}>request</Text>
-        <Text style={styles.debugText}>{debugInfo.requestPayload}</Text>
+      {isExpanded && (
+        <ScrollView
+          style={styles.debugScroll}
+          contentContainerStyle={styles.debugScrollContent}
+        >
+          <Text style={styles.debugMetaText}>
+            bundleIdentifier: {debugInfo.bundleIdentifier}
+          </Text>
 
-        {debugInfo.lastError ? (
-          <>
-            <Text style={styles.debugSectionTitle}>error</Text>
-            <Text style={styles.debugErrorText}>{debugInfo.lastError}</Text>
-          </>
-        ) : null}
+          <Text style={styles.debugSectionTitle}>request</Text>
+          <Text style={styles.debugText}>{debugInfo.requestPayload}</Text>
 
-        <Text style={styles.debugSectionTitle}>response</Text>
-        <Text style={styles.debugText}>{debugInfo.fetchProductsResponse}</Text>
-      </ScrollView>
+          {debugInfo.lastError ? (
+            <>
+              <Text style={styles.debugSectionTitle}>error</Text>
+              <Text style={styles.debugErrorText}>{debugInfo.lastError}</Text>
+            </>
+          ) : null}
+
+          <Text style={styles.debugSectionTitle}>response</Text>
+          <Text style={styles.debugText}>{debugInfo.fetchProductsResponse}</Text>
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -62,10 +72,21 @@ function createStyles(theme: UiTheme) {
       color: theme.text.primary,
       fontSize: 14,
       fontWeight: '700',
-      textAlign: 'center',
+    },
+    debugHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    debugToggleText: {
+      color: theme.text.placeholder,
+      fontSize: 12,
+      fontWeight: '600',
     },
     debugScroll: {
       maxHeight: 220,
+      marginTop: 10,
     },
     debugScrollContent: {
       gap: 8,
