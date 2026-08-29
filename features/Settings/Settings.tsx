@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useIsFocused } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 import { DetailScreenShell, useDetailScreenStyles } from '@/components/detail-screen-shell';
 import { SUPPORT_FEATURE_ENABLED } from '@/constants/app-config';
@@ -10,12 +11,14 @@ import { useSupportModal } from '@/contexts/support-modal-context';
 import { useSettings } from '@/contexts/settings-context';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import { ThemeName } from '@/constants/ui-theme';
+import { RouteNamePaths } from '@/types/router';
 import {
   getCalendarPermissionState,
   requestCalendarPermission,
 } from '@/utils/reminder-calendar';
 
 export default function Settings() {
+  const router = useRouter();
   const detailScreenStyles = useDetailScreenStyles();
   const { themeName } = useAppTheme();
   const { t, languageCode, setLanguageCode, languageLabels } = useI18n();
@@ -392,6 +395,19 @@ export default function Settings() {
             </Text>
           </Pressable>
         )}
+      </View>
+
+      <View style={[detailScreenStyles.card, detailScreenStyles.cardWithGap]}>
+        <Pressable
+          style={detailScreenStyles.optionButton}
+          onPress={() => {
+            router.navigate(RouteNamePaths.diagnostics);
+          }}
+        >
+          <Text style={[detailScreenStyles.optionButtonText, detailScreenStyles.notificationsOptionButtonText]}>
+            {t('settings.diagnostics.button')}
+          </Text>
+        </Pressable>
       </View>
     </DetailScreenShell>
   );

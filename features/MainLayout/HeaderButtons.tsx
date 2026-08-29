@@ -53,13 +53,14 @@ export default function HeaderButtons() {
   const isContactScreen = pathname === RouteNamePaths.contact;
   const isSettingsScreen = pathname === RouteNamePaths.settings;
   const isAboutScreen = pathname === RouteNamePaths.about;
+  const isDiagnosticsScreen = pathname === RouteNamePaths.diagnostics;
   const isNotificationsScreen = pathname === RouteNamePaths.notifications;
   const isIndexScreen = pathname === RouteNamePaths.root || pathname === RouteNamePaths.cities;
   const isTimelineScreen = pathname === RouteNamePaths.timeline;
   const isInfiniteTimelineScreen = pathname === RouteNamePaths.timelineInfinite;
 
   const isSortScreen = isIndexScreen || isTimelineScreen || isInfiniteTimelineScreen || isNotificationsScreen;
-  const isDetailScreen = isEditCityScreen || isContactScreen || isSettingsScreen || isAboutScreen;
+  const isDetailScreen = isEditCityScreen || isContactScreen || isSettingsScreen || isAboutScreen || isDiagnosticsScreen;
 
   const currentEditCityId = isEditCityScreen && globalParams.cityId ? Number(globalParams.cityId) : null;
 
@@ -124,6 +125,11 @@ export default function HeaderButtons() {
   };
 
   const handleBackFromEditCity = () => {
+    if (pathname === RouteNamePaths.diagnostics) {
+      router.navigate(RouteNamePaths.settings);
+      return;
+    }
+
     router.navigate(lastActiveTabPathRef.current);
   };
 
@@ -200,7 +206,7 @@ export default function HeaderButtons() {
           </>
         )}
 
-        {(isContactScreen || isSettingsScreen || isAboutScreen) && (
+        {(isContactScreen || isSettingsScreen || isAboutScreen || isDiagnosticsScreen) && (
           <>
             <Pressable
               onPress={handleBackFromEditCity}

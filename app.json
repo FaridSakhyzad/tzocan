@@ -48,7 +48,7 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "Allow $(PRODUCT_NAME) to access your calendars."
+          "calendarPermission": "$(PRODUCT_NAME) uses calendar access to view your existing calendars and save events you create in the app, such as events scheduled for another time zone."
         }
       ],
       "expo-mail-composer",

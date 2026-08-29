@@ -4,7 +4,7 @@ import { Linking, Platform } from 'react-native';
 
 import { SupportModal } from '@/components/support-modal';
 import { STRIPE_SUPPORT_SUCCESS_URL } from '@/constants/app-config';
-import { useSupportPurchases } from '@/hooks/use-support-purchases';
+import { SupportDiagnostics, useSupportPurchases } from '@/hooks/use-support-purchases';
 
 const STRIPE_SUPPORT_ACKNOWLEDGED_STORAGE_KEY = '@timecross_stripe_support_acknowledged';
 
@@ -25,6 +25,7 @@ type SupportModalContextValue = {
   isSupportPurchasesLoading: boolean;
   isRestoringSupportPurchases: boolean;
   isSupportUnavailable: boolean;
+  diagnostics: SupportDiagnostics;
   restoreSupportPurchases: () => Promise<string[]>;
   acknowledgeSupportOutsideStore: () => Promise<void>;
   resetSupportLocalState: () => Promise<void>;
@@ -37,6 +38,7 @@ export function SupportModalProvider({ children }: { children: ReactNode }) {
   const [hasAcknowledgedSupportOutsideStore, setHasAcknowledgedSupportOutsideStore] = useState(false);
   const {
     debugInfo,
+    diagnostics,
     hasPurchasedAnySupportProduct,
     isLoading,
     isRestoring,
@@ -145,12 +147,14 @@ export function SupportModalProvider({ children }: { children: ReactNode }) {
     isSupportPurchasesLoading: isLoading,
     isRestoringSupportPurchases: isRestoring,
     isSupportUnavailable: isUnavailable,
+    diagnostics,
     restoreSupportPurchases: restorePurchases,
     acknowledgeSupportOutsideStore,
     resetSupportLocalState,
   }), [
     acknowledgeSupportOutsideStore,
     canPurchaseAnySupportProduct,
+    diagnostics,
     hasAcknowledgedSupportOutsideStore,
     hasPurchasedAnySupportProduct,
     isLoading,

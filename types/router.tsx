@@ -9,6 +9,7 @@ export enum RouteNames {
   contact = 'contact',
   settings = 'settings',
   about = 'about',
+  diagnostics = 'diagnostics',
 }
 
 export enum RouteNamePaths {
@@ -22,4 +23,5 @@ export enum RouteNamePaths {
   contact = '/' + RouteNames.contact,
   settings = '/' + RouteNames.settings,
   about = '/' + RouteNames.about,
+  diagnostics = '/' + RouteNames.diagnostics,
 }

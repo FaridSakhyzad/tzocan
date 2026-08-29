@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
@@ -36,8 +37,42 @@ type SupportPurchasesDebugInfo = {
   lastError: string | null;
 };
 
+export type SupportDiagnosticsProduct = {
+  id: SupportProductId;
+  title: string;
+  displayPrice: string | null;
+  wasReturned: boolean;
+};
+
+export type SupportDiagnostics = {
+  bundleIdentifier: string;
+  storeConnectionState: 'idle' | 'connecting' | 'connected' | 'failed';
+  returnedProductCount: number;
+  products: SupportDiagnosticsProduct[];
+  lastError: string | null;
+  requestPayload: string;
+  fetchProductsResponse: string;
+};
+
 function isSupportProductId(value: string): value is SupportProductId {
   return SUPPORT_PRODUCT_IDS.includes(value as SupportProductId);
+}
+
+function getBundleIdentifier() {
+  return (
+    Application.applicationId ??
+    Constants.expoConfig?.ios?.bundleIdentifier ??
+    Constants.expoConfig?.android?.package ??
+    'unknown'
+  );
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
 }
 
 export function useSupportPurchases() {
@@ -52,8 +87,12 @@ export function useSupportPurchases() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUnavailable, setIsUnavailable] = useState(false);
+  const [storeConnectionState, setStoreConnectionState] = useState<
+    SupportDiagnostics['storeConnectionState']
+  >('idle');
+  const [lastStoreError, setLastStoreError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<SupportPurchasesDebugInfo>({
-    bundleIdentifier: Constants.expoConfig?.ios?.bundleIdentifier ?? 'unknown',
+    bundleIdentifier: getBundleIdentifier(),
     requestPayload: JSON.stringify({
       skus: [...SUPPORT_PRODUCT_IDS],
       type: 'in-app',
@@ -85,6 +124,11 @@ export function useSupportPurchases() {
 
     const initializePurchases = async () => {
       try {
+        if (isMounted) {
+          setStoreConnectionState('connecting');
+          setLastStoreError(null);
+        }
+
         const storedPurchasedProductIds = await AsyncStorage.getItem(PURCHASED_SUPPORT_PRODUCTS_STORAGE_KEY);
 
         if (storedPurchasedProductIds && isMounted) {
@@ -119,6 +163,7 @@ export function useSupportPurchases() {
           }
 
           console.warn('Support purchase failed', error);
+          setLastStoreError(getErrorMessage(error));
           setPurchasingProductId(null);
         });
 
@@ -146,7 +191,7 @@ export function useSupportPurchases() {
         }
 
         setDebugInfo({
-          bundleIdentifier: Constants.expoConfig?.ios?.bundleIdentifier ?? 'unknown',
+          bundleIdentifier: getBundleIdentifier(),
           requestPayload: JSON.stringify({
             skus: [...SUPPORT_PRODUCT_IDS],
             type: 'in-app',
@@ -171,20 +216,24 @@ export function useSupportPurchases() {
         setProductsById(nextProductsById);
         mergePurchasedProductIds(restoredPurchasedProductIds);
         setIsUnavailable(Object.keys(nextProductsById).length === 0 && !hasDevFallbackProducts);
+        setStoreConnectionState('connected');
+        setLastStoreError(null);
       } catch (error) {
         console.warn('Failed to initialize support purchases', error);
 
         if (isMounted) {
           setProductsById({});
           setDebugInfo({
-            bundleIdentifier: Constants.expoConfig?.ios?.bundleIdentifier ?? 'unknown',
+            bundleIdentifier: getBundleIdentifier(),
             requestPayload: JSON.stringify({
               skus: [...SUPPORT_PRODUCT_IDS],
               type: 'in-app',
             }, null, 2),
             fetchProductsResponse: 'No response',
-            lastError: error instanceof Error ? error.message : String(error),
+            lastError: getErrorMessage(error),
           });
+          setStoreConnectionState('failed');
+          setLastStoreError(getErrorMessage(error));
           setIsUnavailable(!hasDevFallbackProducts);
           setPurchasingProductId(null);
         }
@@ -235,6 +284,25 @@ export function useSupportPurchases() {
     return nextProducts;
   }, [isUnavailable, productsById, purchasedProductIds, purchasingProductId]);
 
+  const diagnostics = useMemo<SupportDiagnostics>(() => ({
+    bundleIdentifier: debugInfo.bundleIdentifier,
+    storeConnectionState,
+    returnedProductCount: Object.keys(productsById).length,
+    products: SUPPORT_PRODUCT_CONFIGS.map((productConfig) => {
+      const product = productsById[productConfig.id];
+
+      return {
+        id: productConfig.id,
+        title: product?.displayName ?? product?.title ?? productConfig.label,
+        displayPrice: product?.displayPrice ?? null,
+        wasReturned: Boolean(product),
+      };
+    }),
+    lastError: lastStoreError ?? debugInfo.lastError,
+    requestPayload: debugInfo.requestPayload,
+    fetchProductsResponse: debugInfo.fetchProductsResponse,
+  }), [debugInfo, lastStoreError, productsById, storeConnectionState]);
+
   const hasPurchasedAnySupportProduct = useMemo(
     () => purchasedProductIds.length > 0,
     [purchasedProductIds]
@@ -268,6 +336,7 @@ export function useSupportPurchases() {
       });
     } catch (error) {
       console.warn('Failed to request support purchase', error);
+      setLastStoreError(getErrorMessage(error));
       setPurchasingProductId(null);
     }
   }, [purchasedProductIds, purchasingProductId]);
@@ -305,6 +374,7 @@ export function useSupportPurchases() {
 
   return {
     debugInfo,
+    diagnostics,
     hasPurchasedAnySupportProduct,
     isLoading,
     isRestoring,

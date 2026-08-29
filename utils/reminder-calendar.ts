@@ -42,51 +42,7 @@ type CalendarOptionsResult = {
   options: CalendarOption[];
 };
 
-const DEV_CALENDAR_FIXTURES: CalendarOption[] = __DEV__
-  ? Array.from({ length: 30 }, (_, index) => {
-      const fixtureNumber = index + 1;
-
-      if (fixtureNumber === 1) {
-        return {
-          id: 'dev-calendar-primary',
-          label: 'TimeCross QA Primary Calendar',
-          hint: 'Fixture',
-        };
-      }
-
-      if (fixtureNumber === 2) {
-        return {
-          id: 'dev-calendar-shared',
-          label: 'Shared Family Planning Calendar',
-          hint: 'Fixture',
-        };
-      }
-
-      if (fixtureNumber === 3) {
-        return {
-          id: 'dev-calendar-long-unbreakable',
-          label: 'Three Words First SuperUltraHyperMegaCalendarNameWithoutAnySpacesOrNaturalBreakPointsSoWeCanInspectTheWorstCaseScenarioInThePicker Two Words',
-          hint: 'Fixture',
-        };
-      }
-
-      return {
-        id: `dev-calendar-${fixtureNumber}`,
-        label: `TimeCross QA Calendar ${fixtureNumber}`,
-        hint: 'Fixture',
-      };
-    })
-  : [];
-
 let calendarModulePromise: Promise<CalendarModule | null> | null = null;
-
-function appendDevCalendarFixtures(options: CalendarOption[]) {
-  if (!__DEV__) {
-    return options;
-  }
-
-  return [...DEV_CALENDAR_FIXTURES, ...options];
-}
 
 function isUnsupportedCalendarRuntime() {
   return Constants.appOwnership === 'expo';
@@ -329,8 +285,8 @@ export async function getCalendarOptions(): Promise<CalendarOptionsResult> {
 
   if (!Calendar) {
     return {
-      available: DEV_CALENDAR_FIXTURES.length > 0,
-      options: appendDevCalendarFixtures([]),
+      available: false,
+      options: [],
     };
   }
 
@@ -338,8 +294,8 @@ export async function getCalendarOptions(): Promise<CalendarOptionsResult> {
 
   if (!hasPermissions) {
     return {
-      available: DEV_CALENDAR_FIXTURES.length > 0,
-      options: appendDevCalendarFixtures([]),
+      available: false,
+      options: [],
     };
   }
 
@@ -373,14 +329,14 @@ export async function getCalendarOptions(): Promise<CalendarOptionsResult> {
 
     return {
       available: true,
-      options: appendDevCalendarFixtures(options),
+      options,
     };
   } catch (error) {
     console.warn('Failed to load calendar options', error);
 
     return {
-      available: DEV_CALENDAR_FIXTURES.length > 0,
-      options: appendDevCalendarFixtures([]),
+      available: false,
+      options: [],
     };
   }
 }
