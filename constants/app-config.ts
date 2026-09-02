@@ -4,6 +4,7 @@ export const STRIPE_SUPPORT_SUCCESS_URL = 'timecross://support/thanks?source=str
 export const SUPPORT_FEATURE_ENABLED = true;
 export const SUPPORT_IAP_DEBUG_ENABLED = false;
 export const SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED = false;
+export const SUPPORT_IAP_DEV_FALLBACK_PURCHASED_PRODUCT_INDEXES = [0, 5] as const;
 export const INFINITE_TIMELINE_ENABLED = false;
 
 export const TIME_REFRESH_INTERVAL_MS = 30000;

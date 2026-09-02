@@ -15,7 +15,10 @@ import {
   requestPurchase,
 } from 'expo-iap';
 
-import { SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED } from '@/constants/app-config';
+import {
+  SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED,
+  SUPPORT_IAP_DEV_FALLBACK_PURCHASED_PRODUCT_INDEXES,
+} from '@/constants/app-config';
 import { SUPPORT_PRODUCT_CONFIGS, SUPPORT_PRODUCT_IDS, type SupportProductId } from '@/constants/support-products';
 
 const PURCHASED_SUPPORT_PRODUCTS_STORAGE_KEY = '@timecross_purchased_support_products';
@@ -81,6 +84,27 @@ export function useSupportPurchases() {
     Platform.OS !== 'android' &&
     SUPPORT_IAP_DEV_FALLBACK_PRICES_ENABLED &&
     SUPPORT_PRODUCT_CONFIGS.length > 0;
+  const mockedPurchasedProductIds = useMemo(
+    () => {
+      if (!hasDevFallbackProducts) {
+        return [] as SupportProductId[];
+      }
+
+      return SUPPORT_IAP_DEV_FALLBACK_PURCHASED_PRODUCT_INDEXES.reduce<SupportProductId[]>(
+        (result, index) => {
+          const productId = SUPPORT_PRODUCT_CONFIGS[index]?.id;
+
+          if (productId) {
+            result.push(productId);
+          }
+
+          return result;
+        },
+        []
+      );
+    },
+    [hasDevFallbackProducts]
+  );
   const [productsById, setProductsById] = useState<Partial<Record<SupportProductId, Product>>>({});
   const [purchasedProductIds, setPurchasedProductIds] = useState<SupportProductId[]>([]);
   const [purchasingProductId, setPurchasingProductId] = useState<SupportProductId | null>(null);
@@ -135,6 +159,10 @@ export function useSupportPurchases() {
           const parsedProductIds = JSON.parse(storedPurchasedProductIds) as string[];
           const validProductIds = parsedProductIds.filter(isSupportProductId);
           setPurchasedProductIds(validProductIds);
+        }
+
+        if (isMounted && mockedPurchasedProductIds.length > 0) {
+          mergePurchasedProductIds(mockedPurchasedProductIds);
         }
 
         purchaseUpdatedSubscription = purchaseUpdatedListener(async (purchase) => {
@@ -254,7 +282,7 @@ export function useSupportPurchases() {
         console.warn('Failed to close support purchase connection', error);
       });
     };
-  }, [hasDevFallbackProducts, mergePurchasedProductIds]);
+  }, [hasDevFallbackProducts, mergePurchasedProductIds, mockedPurchasedProductIds]);
 
   const supportProducts = useMemo<SupportProductRow[]>(() => {
     const nextProducts: SupportProductRow[] = [];
@@ -263,7 +291,8 @@ export function useSupportPurchases() {
       const product = productsById[productConfig.id];
       const isPurchased = purchasedProductIds.includes(productConfig.id);
       const isPurchasing = purchasingProductId === productConfig.id;
-      const isDisabled = isUnavailable || !product || isPurchased || isPurchasing;
+      const hasRenderableProduct = Boolean(product) || hasDevFallbackProducts;
+      const isDisabled = isUnavailable || !hasRenderableProduct || isPurchased || isPurchasing;
 
       nextProducts.push({
         id: productConfig.id,
@@ -282,7 +311,7 @@ export function useSupportPurchases() {
     }
 
     return nextProducts;
-  }, [isUnavailable, productsById, purchasedProductIds, purchasingProductId]);
+  }, [hasDevFallbackProducts, isUnavailable, productsById, purchasedProductIds, purchasingProductId]);
 
   const diagnostics = useMemo<SupportDiagnostics>(() => ({
     bundleIdentifier: debugInfo.bundleIdentifier,
@@ -320,6 +349,11 @@ export function useSupportPurchases() {
       return;
     }
 
+    if (hasDevFallbackProducts && Object.keys(productsById).length === 0) {
+      mergePurchasedProductIds([productId]);
+      return;
+    }
+
     setPurchasingProductId(productId);
 
     try {
@@ -339,7 +373,7 @@ export function useSupportPurchases() {
       setLastStoreError(getErrorMessage(error));
       setPurchasingProductId(null);
     }
-  }, [purchasedProductIds, purchasingProductId]);
+  }, [hasDevFallbackProducts, mergePurchasedProductIds, productsById, purchasedProductIds, purchasingProductId]);
 
   const restorePurchases = useCallback(async () => {
     if (isRestoring) {

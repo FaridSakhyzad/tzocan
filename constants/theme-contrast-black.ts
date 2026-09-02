@@ -38,6 +38,7 @@ export const themeContrastBlack: UiTheme = {
       subtleStrong: 'rgba(255, 255, 255, 0.16)',
       subtleMedium: 'rgba(255, 255, 255, 0.13)',
       subtleWeak: 'rgba(255, 255, 255, 0.06)',
+      subtleWeaker: 'rgba(255, 255, 255, 0.03)',
       danger: '#ffffff',
     },
   },

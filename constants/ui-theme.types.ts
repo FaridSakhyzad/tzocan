@@ -37,6 +37,7 @@ export type UiTheme = {
       subtleStrong: string;
       subtleMedium: string;
       subtleWeak: string;
+      subtleWeaker: string;
       danger: string;
     };
   };

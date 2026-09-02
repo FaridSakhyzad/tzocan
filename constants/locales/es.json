@@ -131,6 +131,7 @@
   "addCity.databaseUnavailable": "La búsqueda de ciudades no está disponible temporalmente.",
   "support.description": "La app TimeCross se puede usar completamente gratis.\nSi te ayuda, puedes apoyar su futuro.",
   "support.futureDevelopment": "Desarrollo futuro...",
+  "support.purchased": "Apoyado. Gracias",
   "support.unavailable": "Las compras dentro de la app no están disponibles ahora mismo.",
   "notifications.helper": "Agrega al menos una ciudad primero",
   "notifications.empty": "Aún no hay recordatorios",

@@ -131,6 +131,7 @@
   "addCity.databaseUnavailable": "Пошук міст тимчасово недоступний.",
   "support.description": "Застосунком TimeCross можна повністю користуватися безкоштовно.\nЯкщо він вам допомагає, ви можете підтримати його майбутнє.",
   "support.futureDevelopment": "Майбутня розробка...",
+  "support.purchased": "Підтримано. Дякую",
   "support.unavailable": "Вбудовані покупки зараз недоступні.",
   "notifications.helper": "Спочатку додайте хоча б одне місто",
   "notifications.empty": "Нагадувань поки немає",

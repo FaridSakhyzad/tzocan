@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Application from 'expo-application';
-import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
 
 import { DetailScreenShell, useDetailScreenStyles } from '@/components/detail-screen-shell';
@@ -84,6 +83,7 @@ export default function Diagnostics() {
     setIsCopying(true);
 
     try {
+      const Clipboard = await import('expo-clipboard');
       await Clipboard.setStringAsync(diagnosticsText);
       Alert.alert(t('diagnostics.title'), t('diagnostics.copySuccess'));
     } catch {

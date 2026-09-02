@@ -22,6 +22,8 @@ import { useI18n } from '@/hooks/use-i18n';
 import { useModalVisibilityAnimation } from '@/hooks/use-modal-visibility-animation';
 import { SupportIapDebug } from '@/components/support-iap-debug';
 
+import HeartIconSmall from '@/assets/images/icon--heart-1.svg';
+
 import HeartIcon from '@/assets/images/icon--heart-2--outlined.svg';
 import CoffeeIcon from '@/assets/images/icon--coffee-1--outlined.svg';
 import StarIcon from '@/assets/images/icon--star-1--outlined.svg';
@@ -201,7 +203,10 @@ export function SupportModal({
                           disabled={product.isDisabled}
                         >
                           {product.tier === 'standard' && (
-                            <View style={styles.productButtonIcon}>
+                            <View style={[
+                              styles.productButtonIcon,
+                              product.isDisabled && styles.productButtonIconDisabled,
+                            ]}>
                               {product.id === SUPPORT_PRODUCT_CONFIGS[0].id && (
                                 <HeartIcon fill={theme.text.primary} />
                               )}
@@ -219,13 +224,26 @@ export function SupportModal({
                           <Text style={[
                             styles.productButtonText,
                             product.tier === 'future' && styles.productButtonTextFuture,
+                            product.isDisabled && styles.productButtonTextDisabled,
                           ]}>{product.label}</Text>
 
                           <View style={styles.productButtonPriceBox}>
-                            {product.price && <Text style={[
+                            <Text style={[
                               styles.productButtonPrice,
+                              product.isDisabled && styles.productButtonPriceDisabled,
                               product.tier === 'future' && styles.productButtonPriceFuture
-                            ]}>{product.price}</Text>}
+                            ]}>
+                              {product.price ? product.price : t('support.purchased')}
+                            </Text>
+
+                            {product.isDisabled && (
+                              <HeartIconSmall
+                                fill={product.tier === 'future' ? theme.text.warning : theme.text.primary}
+                                style={styles.productButtonHeartIcon}
+                                width={10}
+                                height={8}
+                              />
+                            )}
                           </View>
                         </Pressable>
                       ))}
@@ -346,11 +364,14 @@ function createStyles(theme: UiTheme) {
       bottom: 5,
       left: 10,
     },
+    productButtonIconDisabled: {
+      opacity: 0.5,
+    },
     productButtonWithIcon: {
       paddingInline: 45,
     },
     productButtonDisabled: {
-      // opacity: 0.5,
+      backgroundColor: theme.surface.button.subtleWeaker,
     },
     productButtonText: {
       textAlign: 'center',
@@ -359,12 +380,18 @@ function createStyles(theme: UiTheme) {
       color: theme.text.primary,
       width: '100%',
     },
+    productButtonTextDisabled: {
+      color: theme.text.helper,
+    },
     productButtonTextFuture: {
       marginLeft: 0,
     },
     productButtonPriceBox: {
       width: '100%',
       alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 4,
     },
     productButtonPrice: {
       fontSize: 15,
@@ -372,8 +399,15 @@ function createStyles(theme: UiTheme) {
       fontWeight: 'bold',
       color: theme.text.primary,
     },
+    productButtonPriceDisabled: {
+      fontWeight: 'regular',
+    },
     productButtonPriceFuture: {
       color: theme.text.warning,
+    },
+    productButtonHeartIcon: {
+      width: 10,
+      height: 12,
     },
     stateText: {
       fontSize: theme.typography.body.fontSize,

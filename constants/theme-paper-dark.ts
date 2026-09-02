@@ -38,6 +38,7 @@ export const themePaperDark: UiTheme = {
       subtleStrong: 'rgba(242, 231, 216, 0.2)',
       subtleMedium: 'rgba(242, 231, 216, 0.16)',
       subtleWeak: 'rgba(242, 231, 216, 0.08)',
+      subtleWeaker: 'rgba(242, 231, 216, 0.04)',
       danger: '#d18d76',
     },
   },
